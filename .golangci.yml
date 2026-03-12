@@ -3,15 +3,10 @@ version: "2"
 linters:
   enable:
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
     - unused
-
-  settings:
-    govet:
-      enable-all: false
 
 issues:
   max-issues-per-linter: 0
