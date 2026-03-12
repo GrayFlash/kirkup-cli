@@ -7,28 +7,44 @@ on:
     branches: ["**"]
 
 jobs:
-  ci:
-    name: Build, Vet, Test, Lint
+  build:
+    name: Build
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - run: go build ./...
 
-      - name: Build
-        run: go build ./...
+  vet:
+    name: Vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
 
-      - name: Vet
-        run: go vet ./...
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
 
-      - name: Test
-        run: go test ./...
-
-      - name: Lint
-        uses: golangci/golangci-lint-action@v6
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v6
         with:
           version: latest
