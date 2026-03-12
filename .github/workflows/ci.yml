@@ -2,9 +2,11 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
-    branches: ["**"]
+
+env:
+  GO_VERSION: "1.25.5"
 
 jobs:
   build:
@@ -14,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
       - run: go build ./...
 
   vet:
@@ -24,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
       - run: go vet ./...
 
   test:
@@ -34,7 +36,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
       - run: go test ./...
 
   lint:
@@ -44,7 +46,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
       - uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v1.64.8
