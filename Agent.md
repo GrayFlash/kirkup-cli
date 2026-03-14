@@ -1,13 +1,25 @@
 # Agent Instructions
 
-Full spec: `issues/kirkup-spec.md`
+Project spec managed in `issues/kirkup-spec.md`
+Project Status managed in `issues/v1-scope.md`
 
 ## Architecture
 
-Flat, plugin-driven. Package by feature, not by layer. Each package owns its interface, types, and implementations together.
+Golang based, Flat structured, plugin-driven.
+Package by feature, not by layer.
+Each package owns its interface, types, and implementations together.
+
+## Conventions
+
+- Interfaces live next to implementations, not in a separate ports layer
+- `models/` is the only shared package — keep it dependency-free
+- Adding a new agent or store = one new sub-package implementing the interface
+- Technology: Go, Cobra, fsnotify, SQLite + Postgres, YAML config
+
+## Directory structure
 
 ```md
-kirkup/
+kirkup-cli/
 ├── main.go                        # Entry point, wires dependencies
 ├── cmd/kirkup/                    # Cobra CLI commands (thin — no business logic)
 ├── agent/                         # AgentAdapter interface + implementations
@@ -32,10 +44,3 @@ kirkup/
 ├── go.mod
 └── .goreleaser.yaml
 ```
-
-## Conventions
-
-- Interfaces live next to implementations, not in a separate ports layer
-- `models/` is the only shared package — keep it dependency-free
-- Adding a new agent or store = one new sub-package implementing the interface
-- Go, Cobra, fsnotify, SQLite + Postgres, YAML config
