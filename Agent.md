@@ -4,7 +4,7 @@
 
 - Always load documentation for context at startup.
 - Project spec managed in `issues/kirkup-spec.md`
-- Project Status managed in `issues/v1-scope.md`
+- Project Status managed in `issues/v0.1-scope.md`
 - Project related public docs wrriten to `docs`.
 - Always confirm with user before writing to documentations.
 - Keep code comments for documentation to minimal.
