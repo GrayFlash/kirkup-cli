@@ -103,7 +103,7 @@ func (s *Store) InsertPromptEvent(ctx context.Context, e *models.PromptEvent) er
 		e.CreatedAt = time.Now().UTC()
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO prompt_events
+		`INSERT OR IGNORE INTO prompt_events
 		 (id, timestamp, agent, session_id, prompt, project, git_branch, git_remote, working_dir, raw_source, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		e.ID, e.Timestamp.UTC(), e.Agent, e.SessionID, e.Prompt,

@@ -21,15 +21,21 @@ func New() *Adapter { return &Adapter{} }
 func (a *Adapter) Name() string { return "cursor" }
 
 func (a *Adapter) Detect() bool {
-	home, _ := os.UserHomeDir()
-	_, err := os.Stat(filepath.Join(home, ".config", "Cursor"))
+	base, ok := cursorBase()
+	if !ok {
+		return false
+	}
+	_, err := os.Stat(base)
 	return err == nil
 }
 
 func (a *Adapter) WatchGlobs() []string {
-	home, _ := os.UserHomeDir()
+	base, ok := cursorBase()
+	if !ok {
+		return nil
+	}
 	return []string{
-		filepath.Join(home, ".config", "Cursor", "User", "workspaceStorage", "*", "state.vscdb"),
+		filepath.Join(base, "User", "workspaceStorage", "*", "state.vscdb"),
 	}
 }
 
@@ -76,6 +82,16 @@ func (a *Adapter) Events(_ context.Context, path string) ([]models.PromptEvent, 
 		})
 	}
 	return events, nil
+}
+
+// cursorBase returns the platform-specific Cursor config directory using
+// os.UserConfigDir which handles Linux, macOS, and Windows automatically.
+func cursorBase() (string, bool) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", false
+	}
+	return filepath.Join(dir, "Cursor"), true
 }
 
 // readWorkspaceFolder resolves the project directory from the
