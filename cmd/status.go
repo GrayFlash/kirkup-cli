@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/GrayFlash/kirkup-cli/agent"
+	agentclaude "github.com/GrayFlash/kirkup-cli/agent/claude"
 	agentcursor "github.com/GrayFlash/kirkup-cli/agent/cursor"
 	agentgemini "github.com/GrayFlash/kirkup-cli/agent/gemini"
 	"github.com/GrayFlash/kirkup-cli/store"
@@ -36,6 +37,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	registry := agent.NewRegistry(
 		agentgemini.New(),
 		agentcursor.New(),
+		agentclaude.New(),
 	)
 	fmt.Println()
 	fmt.Println("agents:")
