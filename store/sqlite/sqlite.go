@@ -207,6 +207,48 @@ func (s *Store) GetUnclassified(ctx context.Context, limit int) ([]models.Prompt
 	return events, rows.Err()
 }
 
+func (s *Store) QueryClassifications(ctx context.Context, eventIDs []string) ([]models.Classification, error) {
+	if len(eventIDs) == 0 {
+		return nil, nil
+	}
+	// Build WHERE IN clause in batches of 100 to avoid SQLite limits.
+	var all []models.Classification
+	for i := 0; i < len(eventIDs); i += 100 {
+		end := i + 100
+		if end > len(eventIDs) {
+			end = len(eventIDs)
+		}
+		batch := eventIDs[i:end]
+		placeholders := strings.Repeat("?,", len(batch))
+		placeholders = placeholders[:len(placeholders)-1]
+		query := `SELECT id, prompt_event_id, category, confidence, classifier, created_at
+		          FROM classifications WHERE prompt_event_id IN (` + placeholders + `)`
+		args := make([]any, len(batch))
+		for j, id := range batch {
+			args[j] = id
+		}
+		rows, err := s.db.QueryContext(ctx, query, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var c models.Classification
+			if err := rows.Scan(&c.ID, &c.PromptEventID, &c.Category, &c.Confidence, &c.Classifier, &c.CreatedAt); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			all = append(all, c)
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return all, nil
+}
+
 // -- Sessions --
 
 func (s *Store) UpsertSession(ctx context.Context, sess *models.Session) error {

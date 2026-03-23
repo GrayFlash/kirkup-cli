@@ -15,6 +15,7 @@ type Store interface {
 	// Classifications
 	InsertClassification(ctx context.Context, c *models.Classification) error
 	GetUnclassified(ctx context.Context, limit int) ([]models.PromptEvent, error)
+	QueryClassifications(ctx context.Context, eventIDs []string) ([]models.Classification, error)
 
 	// Sessions
 	UpsertSession(ctx context.Context, s *models.Session) error
