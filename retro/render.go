@@ -14,21 +14,42 @@ const (
 )
 
 // Render writes the full retrospective summary to w.
-func Render(w io.Writer, s *Summary) {
+func Render(w io.Writer, s *Summary) error {
+	ew := &errWriter{w: w}
 	if s.TotalPrompts == 0 {
-		fmt.Fprintln(w, "no events found for this period")
-		return
+		ew.println("no events found for this period")
+		return ew.err
 	}
-
-	renderHeader(w, s)
-	renderProjects(w, s)
-	renderCategories(w, s)
-	renderAgents(w, s)
-	renderContextSwitches(w, s)
-	renderDailyActivity(w, s)
+	renderHeader(ew, s)
+	renderProjects(ew, s)
+	renderCategories(ew, s)
+	renderAgents(ew, s)
+	renderContextSwitches(ew, s)
+	renderDailyActivity(ew, s)
+	return ew.err
 }
 
-func renderHeader(w io.Writer, s *Summary) {
+// errWriter captures the first write error so callers don't check every call.
+type errWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (ew *errWriter) printf(format string, args ...any) {
+	if ew.err != nil {
+		return
+	}
+	_, ew.err = fmt.Fprintf(ew.w, format, args...)
+}
+
+func (ew *errWriter) println(args ...any) {
+	if ew.err != nil {
+		return
+	}
+	_, ew.err = fmt.Fprintln(ew.w, args...)
+}
+
+func renderHeader(ew *errWriter, s *Summary) {
 	var title string
 	if isSameWeek(s.From, s.To) {
 		title = fmt.Sprintf("Week of %s — %s", s.From.Format("Jan 2"), s.To.Format("Jan 2, 2006"))
@@ -38,60 +59,56 @@ func renderHeader(w io.Writer, s *Summary) {
 		title = fmt.Sprintf("%s — %s", s.From.Format("Jan 2, 2006"), s.To.Format("Jan 2, 2006"))
 	}
 	width := len(title) + 4
-	fmt.Fprintf(w, "\n╭%s╮\n", strings.Repeat("─", width))
-	fmt.Fprintf(w, "│  %s  │\n", title)
-	fmt.Fprintf(w, "╰%s╯\n\n", strings.Repeat("─", width))
+	ew.printf("\n╭%s╮\n", strings.Repeat("─", width))
+	ew.printf("│  %s  │\n", title)
+	ew.printf("╰%s╯\n\n", strings.Repeat("─", width))
 }
 
-func renderProjects(w io.Writer, s *Summary) {
-	fmt.Fprintln(w, " Projects                          Sessions   Prompts   Est. Time")
-	fmt.Fprintln(w, separator)
+func renderProjects(ew *errWriter, s *Summary) {
+	ew.println(" Projects                          Sessions   Prompts   Est. Time")
+	ew.println(separator)
 	for _, p := range s.Projects {
 		name := p.Name
 		if name == "" {
 			name = "(unknown)"
 		}
-		fmt.Fprintf(w, " %-34s %-10d %-9d %s\n",
-			name, p.Sessions, p.Prompts, fmtDuration(p.EstTime))
+		ew.printf(" %-34s %-10d %-9d %s\n", name, p.Sessions, p.Prompts, fmtDuration(p.EstTime))
 	}
-	fmt.Fprintln(w, separator)
-	fmt.Fprintf(w, " %-34s %-10d %-9d %s\n",
-		"Total", s.TotalSessions, s.TotalPrompts, fmtDuration(s.TotalEstTime))
-	fmt.Fprintln(w)
+	ew.println(separator)
+	ew.printf(" %-34s %-10d %-9d %s\n", "Total", s.TotalSessions, s.TotalPrompts, fmtDuration(s.TotalEstTime))
+	ew.println()
 }
 
-func renderCategories(w io.Writer, s *Summary) {
+func renderCategories(ew *errWriter, s *Summary) {
 	if len(s.Categories) == 0 {
 		return
 	}
-	fmt.Fprintln(w, " By Category")
-	fmt.Fprintln(w, separator)
+	ew.println(" By Category")
+	ew.println(separator)
 	for _, c := range s.Categories {
-		fmt.Fprintf(w, " %-16s %s  %.0f%%\n",
-			c.Category, bar(c.Percent), c.Percent)
+		ew.printf(" %-16s %s  %.0f%%\n", c.Category, bar(c.Percent), c.Percent)
 	}
-	fmt.Fprintln(w)
+	ew.println()
 }
 
-func renderAgents(w io.Writer, s *Summary) {
+func renderAgents(ew *errWriter, s *Summary) {
 	if len(s.Agents) == 0 {
 		return
 	}
-	fmt.Fprintln(w, " By Agent")
-	fmt.Fprintln(w, separator)
+	ew.println(" By Agent")
+	ew.println(separator)
 	for _, a := range s.Agents {
-		fmt.Fprintf(w, " %-16s %s  %.0f%%\n",
-			a.Agent, bar(a.Percent), a.Percent)
+		ew.printf(" %-16s %s  %.0f%%\n", a.Agent, bar(a.Percent), a.Percent)
 	}
-	fmt.Fprintln(w)
+	ew.println()
 }
 
-func renderContextSwitches(w io.Writer, s *Summary) {
+func renderContextSwitches(ew *errWriter, s *Summary) {
 	if len(s.Daily) == 0 {
 		return
 	}
-	fmt.Fprintln(w, " Context Switches (project changes within a day)")
-	fmt.Fprintln(w, separator)
+	ew.println(" Context Switches (project changes within a day)")
+	ew.println(separator)
 
 	var parts []string
 	total := 0
@@ -99,20 +116,17 @@ func renderContextSwitches(w io.Writer, s *Summary) {
 		parts = append(parts, fmt.Sprintf("%s: %d", d.Date.Format("Mon"), d.ContextSwitches))
 		total += d.ContextSwitches
 	}
-	avg := 0.0
-	if len(s.Daily) > 0 {
-		avg = float64(total) / float64(len(s.Daily))
-	}
-	fmt.Fprintf(w, " %s\n", strings.Join(parts, "  "))
-	fmt.Fprintf(w, " Weekly avg: %.1f switches/day\n\n", avg)
+	avg := float64(total) / float64(len(s.Daily))
+	ew.printf(" %s\n", strings.Join(parts, "  "))
+	ew.printf(" Weekly avg: %.1f switches/day\n\n", avg)
 }
 
-func renderDailyActivity(w io.Writer, s *Summary) {
+func renderDailyActivity(ew *errWriter, s *Summary) {
 	if len(s.Daily) == 0 {
 		return
 	}
-	fmt.Fprintln(w, " Daily Activity")
-	fmt.Fprintln(w, separator)
+	ew.println(" Daily Activity")
+	ew.println(separator)
 
 	maxPrompts := 0
 	for _, d := range s.Daily {
@@ -120,16 +134,14 @@ func renderDailyActivity(w io.Writer, s *Summary) {
 			maxPrompts = d.Prompts
 		}
 	}
-
 	for _, d := range s.Daily {
 		pct := 0.0
 		if maxPrompts > 0 {
 			pct = float64(d.Prompts) / float64(maxPrompts) * 100
 		}
-		fmt.Fprintf(w, " %-4s %s  %d prompts\n",
-			d.Date.Format("Mon"), bar(pct), d.Prompts)
+		ew.printf(" %-4s %s  %d prompts\n", d.Date.Format("Mon"), bar(pct), d.Prompts)
 	}
-	fmt.Fprintln(w)
+	ew.println()
 }
 
 // bar renders a fixed-width bar chart segment.

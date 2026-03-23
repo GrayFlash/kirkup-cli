@@ -59,8 +59,7 @@ func runRetro(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("aggregate: %w", err)
 	}
 
-	retro.Render(os.Stdout, summary)
-	return nil
+	return retro.Render(os.Stdout, summary)
 }
 
 // resolveRange returns the from/to time range based on flags.

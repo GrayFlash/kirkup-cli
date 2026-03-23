@@ -14,6 +14,10 @@ import (
 	"github.com/GrayFlash/kirkup-cli/store/sqlite"
 )
 
+// DefaultConfig is set by main.go via go:embed so the binary always carries
+// the full default config regardless of install location.
+var DefaultConfig []byte
+
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Create config file, initialise database, and detect agents",
@@ -34,7 +38,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	if _, err := os.Stat(cfgPath); err == nil {
 		fmt.Printf("config already exists: %s\n", cfgPath)
 	} else {
-		if err := writeDefaultConfig(cfgPath); err != nil {
+		if err := writeDefaultConfig(cfgPath, defaultConfigBytes()); err != nil {
 			return fmt.Errorf("write config: %w", err)
 		}
 		fmt.Printf("created config:        %s\n", cfgPath)
@@ -95,34 +99,23 @@ func defaultDBPath() (string, error) {
 	return filepath.Join(home, ".kirkup", "kirkup.db"), nil
 }
 
-// writeDefaultConfig copies the embedded default config to dst.
-func writeDefaultConfig(dst string) error {
+// writeDefaultConfig writes data to dst, creating parent dirs as needed.
+func writeDefaultConfig(dst string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	data, err := defaultConfigBytes()
-	if err != nil {
 		return err
 	}
 	return os.WriteFile(dst, data, 0o644)
 }
 
-// defaultConfigBytes reads configs/default.yaml relative to the binary.
-// Falls back to an inline minimal config if the file is not found.
-func defaultConfigBytes() ([]byte, error) {
-	// Try reading from the embedded path first (works when running from repo root).
-	candidates := []string{
-		"configs/default.yaml",
-		filepath.Join(filepath.Dir(os.Args[0]), "configs", "default.yaml"),
+func defaultConfigBytes() []byte {
+	if len(DefaultConfig) > 0 {
+		return DefaultConfig
 	}
-	for _, p := range candidates {
-		data, err := os.ReadFile(p)
-		if err == nil {
-			return data, nil
-		}
+	// Fallback for go run / tests where embed is not set.
+	if data, err := os.ReadFile("configs/default.yaml"); err == nil {
+		return data
 	}
-	// Inline fallback so `kirkup init` always works regardless of install method.
-	return []byte(minimalConfig), nil
+	return []byte(minimalConfig)
 }
 
 const minimalConfig = `# ~/.kirkup/config.yaml
