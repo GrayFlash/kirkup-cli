@@ -118,7 +118,7 @@ func renderContextSwitches(ew *errWriter, s *Summary) {
 	}
 	avg := float64(total) / float64(len(s.Daily))
 	ew.printf(" %s\n", strings.Join(parts, "  "))
-	ew.printf(" Weekly avg: %.1f switches/day\n\n", avg)
+	ew.printf(" Avg: %.1f switches/day\n\n", avg)
 }
 
 func renderDailyActivity(ew *errWriter, s *Summary) {

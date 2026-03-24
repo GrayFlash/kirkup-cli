@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -77,9 +78,28 @@ func runProjects(_ *cobra.Command, _ []string) error {
 		}
 	}
 
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		si, sj := stats[names[i]], stats[names[j]]
+		pi, pj := 0, 0
+		if si != nil {
+			pi = si.prompts
+		}
+		if sj != nil {
+			pj = sj.prompts
+		}
+		if pi != pj {
+			return pi > pj
+		}
+		return names[i] < names[j]
+	})
+
 	fmt.Printf("%-30s  %7s  %s\n", "Project", "Prompts", "Last Active")
 	fmt.Printf("%-30s  %7s  %s\n", "───────────────────────────", "───────", "───────────")
-	for name := range seen {
+	for _, name := range names {
 		st := stats[name]
 		prompts := 0
 		lastSeen := "-"

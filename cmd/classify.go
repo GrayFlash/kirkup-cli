@@ -12,6 +12,7 @@ import (
 
 var (
 	classifyReclassify bool
+	classifyMode       string
 )
 
 var classifyCmd = &cobra.Command{
@@ -22,10 +23,15 @@ var classifyCmd = &cobra.Command{
 
 func init() {
 	classifyCmd.Flags().BoolVar(&classifyReclassify, "reclassify", false, "Re-classify all events, not just unclassified ones")
+	classifyCmd.Flags().StringVar(&classifyMode, "mode", "rules", "Classifier to use: rules")
 	rootCmd.AddCommand(classifyCmd)
 }
 
 func runClassify(_ *cobra.Command, _ []string) error {
+	if classifyMode != "rules" {
+		return fmt.Errorf("unsupported mode %q: only \"rules\" is available in this version", classifyMode)
+	}
+
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
