@@ -198,10 +198,15 @@ func (c *Collector) processFile(ctx context.Context, a agent.Adapter, path strin
 }
 
 // collectGlobs returns all (adapter, glob pattern) pairs from registered agents.
+// If the config specifies log_paths for an agent, those override the adapter defaults.
 func (c *Collector) collectGlobs() []globEntry {
 	var entries []globEntry
 	for _, a := range c.agents.All() {
-		for _, g := range a.WatchGlobs() {
+		globs := a.WatchGlobs()
+		if cfg, ok := c.cfg.Agents[a.Name()]; ok && len(cfg.LogPaths) > 0 {
+			globs = cfg.LogPaths
+		}
+		for _, g := range globs {
 			entries = append(entries, globEntry{adapter: a, pattern: g})
 		}
 	}

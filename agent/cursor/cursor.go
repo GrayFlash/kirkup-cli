@@ -84,9 +84,18 @@ func (a *Adapter) Events(_ context.Context, path string) ([]models.PromptEvent, 
 	return events, nil
 }
 
-// cursorBase returns the platform-specific Cursor config directory using
-// os.UserConfigDir which handles Linux, macOS, and Windows automatically.
+// cursorBase returns the Cursor config directory.
+// Cursor uses ~/.cursor on Linux and macOS despite platform conventions,
+// falling back to os.UserConfigDir()/Cursor if ~/.cursor does not exist.
 func cursorBase() (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	dotCursor := filepath.Join(home, ".cursor")
+	if _, err := os.Stat(dotCursor); err == nil {
+		return dotCursor, true
+	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", false
