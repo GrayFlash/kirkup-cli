@@ -101,6 +101,9 @@ func renderRight(summary *retro.Summary, focused bool, width, height int) string
 				styleStat.Render(fmt.Sprintf("%d", p.Prompts)),
 				styleMuted.Render(fmtDuration(p.EstTime)),
 			))
+			for _, b := range p.Branches {
+				sections = append(sections, styleMuted.Render(fmt.Sprintf("   %-22s %d prompts", b.Name, b.Prompts)))
+			}
 		}
 	}
 

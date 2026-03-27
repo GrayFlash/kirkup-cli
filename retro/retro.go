@@ -27,6 +27,12 @@ type ProjectStat struct {
 	Sessions int
 	Prompts  int
 	EstTime  time.Duration
+	Branches []BranchStat
+}
+
+type BranchStat struct {
+	Name    string
+	Prompts int
 }
 
 type CategoryStat struct {
@@ -90,8 +96,15 @@ func Aggregate(ctx context.Context, s store.Store, from, to time.Time, project s
 	projectPrompts := make(map[string]int)
 	projectSessions := make(map[string]int)
 	projectTime := make(map[string]time.Duration)
+	projectBranches := make(map[string]map[string]int)
 	for _, e := range events {
 		projectPrompts[e.Project]++
+		if e.GitBranch != "" {
+			if projectBranches[e.Project] == nil {
+				projectBranches[e.Project] = make(map[string]int)
+			}
+			projectBranches[e.Project][e.GitBranch]++
+		}
 	}
 	for _, sess := range sessions {
 		projectSessions[sess.Project]++
@@ -103,11 +116,19 @@ func Aggregate(ctx context.Context, s store.Store, from, to time.Time, project s
 		sum.TotalEstTime += dur
 	}
 	for name, count := range projectPrompts {
+		var branches []BranchStat
+		for b, n := range projectBranches[name] {
+			branches = append(branches, BranchStat{Name: b, Prompts: n})
+		}
+		sort.Slice(branches, func(i, j int) bool {
+			return branches[i].Prompts > branches[j].Prompts
+		})
 		sum.Projects = append(sum.Projects, ProjectStat{
 			Name:     name,
 			Prompts:  count,
 			Sessions: projectSessions[name],
 			EstTime:  projectTime[name],
+			Branches: branches,
 		})
 	}
 	sort.Slice(sum.Projects, func(i, j int) bool {

@@ -73,6 +73,9 @@ func renderProjects(ew *errWriter, s *Summary) {
 			name = "(unknown)"
 		}
 		ew.printf(" %-34s %-10d %-9d %s\n", name, p.Sessions, p.Prompts, fmtDuration(p.EstTime))
+		for _, b := range p.Branches {
+			ew.printf("   %-32s %d prompts\n", "  "+b.Name, b.Prompts)
+		}
 	}
 	ew.println(separator)
 	ew.printf(" %-34s %-10d %-9d %s\n", "Total", s.TotalSessions, s.TotalPrompts, fmtDuration(s.TotalEstTime))
