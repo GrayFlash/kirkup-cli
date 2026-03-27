@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 
 	"github.com/spf13/cobra"
 
@@ -11,8 +13,9 @@ import (
 )
 
 var (
-	classifyReclassify bool
-	classifyMode       string
+	classifyReclassify   bool
+	classifyMode         string
+	classifyReconfigure  bool
 )
 
 var classifyCmd = &cobra.Command{
@@ -24,10 +27,30 @@ var classifyCmd = &cobra.Command{
 func init() {
 	classifyCmd.Flags().BoolVar(&classifyReclassify, "reclassify", false, "Re-classify all events, not just unclassified ones")
 	classifyCmd.Flags().StringVar(&classifyMode, "mode", "rules", "Classifier to use: rules")
+	classifyCmd.Flags().BoolVar(&classifyReconfigure, "reconfigure", false, "Open the classifier config in $EDITOR")
 	rootCmd.AddCommand(classifyCmd)
 }
 
 func runClassify(_ *cobra.Command, _ []string) error {
+	if classifyReconfigure {
+		cfgPath, err := defaultConfigPath()
+		if err != nil {
+			return err
+		}
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = os.Getenv("VISUAL")
+		}
+		if editor == "" {
+			return fmt.Errorf("$EDITOR is not set; open %s manually", cfgPath)
+		}
+		cmd := exec.Command(editor, cfgPath)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+
 	if classifyMode != "rules" {
 		return fmt.Errorf("unsupported mode %q: only \"rules\" is available in this version", classifyMode)
 	}
