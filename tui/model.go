@@ -179,7 +179,7 @@ func (m Model) viewHeader() string {
 		nav = stylePeriodNav.Render("← ") + stylePeriod.Render(period)
 	}
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Render("kirkup")
+	title := styleHeader.Render("kirkup")
 	left := title + styleMuted.Render("  ·  ") + nav
 
 	modeLabel := "week"
