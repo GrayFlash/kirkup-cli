@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -58,7 +59,7 @@ func renderHeader(ew *errWriter, s *Summary) {
 	} else {
 		title = fmt.Sprintf("%s — %s", s.From.Format("Jan 2, 2006"), s.To.Format("Jan 2, 2006"))
 	}
-	width := len(title) + 4
+	width := utf8.RuneCountInString(title) + 4
 	ew.printf("\n╭%s╮\n", strings.Repeat("─", width))
 	ew.printf("│  %s  │\n", title)
 	ew.printf("╰%s╯\n\n", strings.Repeat("─", width))
