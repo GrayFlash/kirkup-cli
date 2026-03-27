@@ -24,13 +24,13 @@ builds:
 
 archives:
   - id: kirkup
-    builds:
+    ids:
       - kirkup
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
-    format: tar.gz
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
     files:
       - LICENSE
       - README.md
@@ -48,7 +48,7 @@ changelog:
       - Merge pull request
       - Merge branch
 
-brews:
+homebrew:
   - name: kirkup
     repository:
       owner: GrayFlash
