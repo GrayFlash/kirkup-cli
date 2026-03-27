@@ -21,7 +21,7 @@ At the end of the week, run `kirkup retro` to see what you actually worked on.
 | Agent       | Status |
 |-------------|--------|
 | Gemini CLI  | ✅     |
-| Cursor      | ✅     |
+| Cursor      |      |
 | Claude Code | ✅     |
 
 ---
