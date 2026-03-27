@@ -46,6 +46,7 @@ go install github.com/GrayFlash/kirkup-cli@latest
 ```sh
 kirkup init       # create config, init DB, detect agents
 kirkup start      # start the background collector
+kirkup classify   # tag events by category (rule-based, LLM support coming soon)
 kirkup retro      # view this week's summary
 ```
 

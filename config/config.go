@@ -9,11 +9,24 @@ import (
 )
 
 type Config struct {
-	Store    StoreConfig            `yaml:"store"`
-	Agents   map[string]AgentConfig `yaml:"agents"`
-	Daemon   DaemonConfig           `yaml:"daemon"`
-	Projects []ProjectConfig        `yaml:"projects"`
-	Sessions SessionsConfig         `yaml:"sessions"`
+	Store      StoreConfig            `yaml:"store"`
+	Agents     map[string]AgentConfig `yaml:"agents"`
+	Daemon     DaemonConfig           `yaml:"daemon"`
+	Projects   []ProjectConfig        `yaml:"projects"`
+	Sessions   SessionsConfig         `yaml:"sessions"`
+	Classifier ClassifierConfig       `yaml:"classifier"`
+}
+
+type ClassifierConfig struct {
+	Mode        string       `yaml:"mode"`
+	CustomRules []CustomRule `yaml:"custom_rules"`
+}
+
+type CustomRule struct {
+	Category string   `yaml:"category"`
+	Keywords []string `yaml:"keywords"`
+	Patterns []string `yaml:"patterns"`
+	Priority int      `yaml:"priority"`
 }
 
 type ProjectConfig struct {

@@ -45,6 +45,9 @@ func runClassify(_ *cobra.Command, _ []string) error {
 	ctx := context.Background()
 
 	rc := classifier.NewRuleClassifier()
+	for _, r := range cfg.Classifier.CustomRules {
+		rc.AddRule(r.Category, r.Keywords, r.Patterns, r.Priority)
+	}
 
 	if classifyReclassify {
 		all, err := s.QueryPromptEvents(ctx, store.EventFilter{})
