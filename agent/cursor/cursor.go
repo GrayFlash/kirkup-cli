@@ -85,7 +85,7 @@ func (a *Adapter) Events(_ context.Context, path string) ([]models.PromptEvent, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var events []models.PromptEvent
 	for rows.Next() {

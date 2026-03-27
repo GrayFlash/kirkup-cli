@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -69,7 +70,7 @@ func TestDecodeDirName(t *testing.T) {
 	if err != nil {
 		t.Skip("cannot determine home dir")
 	}
-	encoded := "Users-" + filepath.Base(home)
+	encoded := strings.ReplaceAll(strings.TrimPrefix(home, "/"), "/", "-")
 	result := decodeDirName(encoded)
 	if result != home {
 		t.Errorf("decodeDirName(%q) = %q, want %q", encoded, result, home)
