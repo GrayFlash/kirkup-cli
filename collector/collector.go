@@ -63,10 +63,11 @@ func (c *Collector) Start(ctx context.Context) error {
 	globs := c.collectGlobs()
 	watchDirs := uniqueDirs(globs)
 	for _, dir := range watchDirs {
-		if err := os.MkdirAll(dir, 0o755); err == nil {
-			if err := watcher.Add(dir); err != nil {
-				c.log.Warn("cannot watch dir", "dir", dir, "err", err)
-			}
+		if _, err := os.Stat(dir); err != nil {
+			continue
+		}
+		if err := watcher.Add(dir); err != nil {
+			c.log.Warn("cannot watch dir", "dir", dir, "err", err)
 		}
 	}
 
