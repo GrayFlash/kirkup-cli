@@ -1,10 +1,15 @@
-/*
-Copyright © 2026 NAME HERE github.com/GrayFlash
-*/
 package main
 
-import "github.com/GrayFlash/kirkup-cli/cmd"
+import (
+	_ "embed"
+
+	"github.com/GrayFlash/kirkup-cli/cmd"
+)
+
+//go:embed configs/default.yaml
+var defaultConfig []byte
 
 func main() {
+	cmd.DefaultConfig = defaultConfig
 	cmd.Execute()
 }

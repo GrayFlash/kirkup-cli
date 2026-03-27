@@ -9,9 +9,39 @@ import (
 )
 
 type Config struct {
-	Store  StoreConfig            `yaml:"store"`
-	Agents map[string]AgentConfig `yaml:"agents"`
-	Daemon DaemonConfig           `yaml:"daemon"`
+	Store      StoreConfig            `yaml:"store"`
+	Agents     map[string]AgentConfig `yaml:"agents"`
+	Daemon     DaemonConfig           `yaml:"daemon"`
+	Projects   []ProjectConfig        `yaml:"projects"`
+	Sessions   SessionsConfig         `yaml:"sessions"`
+	Classifier ClassifierConfig       `yaml:"classifier"`
+}
+
+type ClassifierConfig struct {
+	Mode        string       `yaml:"mode"`
+	CustomRules []CustomRule `yaml:"custom_rules"`
+}
+
+type CustomRule struct {
+	Category string   `yaml:"category"`
+	Keywords []string `yaml:"keywords"`
+	Patterns []string `yaml:"patterns"`
+	Priority int      `yaml:"priority"`
+}
+
+type ProjectConfig struct {
+	Name        string       `yaml:"name"`
+	DisplayName string       `yaml:"display_name"`
+	Match       ProjectMatch `yaml:"match"`
+}
+
+type ProjectMatch struct {
+	GitRemote string   `yaml:"git_remote"`
+	Paths     []string `yaml:"paths"`
+}
+
+type SessionsConfig struct {
+	GapThresholdMinutes int `yaml:"gap_threshold_minutes"`
 }
 
 type StoreConfig struct {
@@ -67,6 +97,9 @@ func defaults() *Config {
 		Daemon: DaemonConfig{
 			PollIntervalSeconds: 5,
 			LogLevel:            "info",
+		},
+		Sessions: SessionsConfig{
+			GapThresholdMinutes: 30,
 		},
 	}
 }
