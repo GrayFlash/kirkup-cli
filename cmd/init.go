@@ -58,7 +58,8 @@ func runInit(_ *cobra.Command, _ []string) error {
 	fmt.Printf("initialised database:  %s\n", dbPath)
 
 	// -- Agent detection --
-	registry := newAgentRegistry()
+	cfg, _ := loadConfig()
+	registry := newAgentRegistry(cfg)
 
 	fmt.Println()
 	fmt.Println("agents:")

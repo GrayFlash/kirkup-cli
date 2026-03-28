@@ -18,12 +18,13 @@ func init() {
 }
 
 func runAgents(_ *cobra.Command, _ []string) error {
-	registry := newAgentRegistry()
+	cfg, _ := loadConfig()
+	registry := newAgentRegistry(cfg)
 
 	for _, a := range registry.All() {
 		status := "not detected"
 		if a.Detect() {
-			status = "detected"
+			status = "detected ✓"
 		}
 		fmt.Printf("%-14s  %s\n", a.Name(), status)
 		for _, g := range a.WatchGlobs() {

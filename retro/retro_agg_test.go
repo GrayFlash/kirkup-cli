@@ -17,6 +17,14 @@ func (m *mockStore) QueryPromptEvents(ctx context.Context, f store.EventFilter) 
 	return m.events, nil
 }
 
+func (m *mockStore) ListEventIDs(ctx context.Context) ([]string, error) {
+	var ids []string
+	for _, e := range m.events {
+		ids = append(ids, e.ID)
+	}
+	return ids, nil
+}
+
 // Stubs for other interface methods
 func (m *mockStore) InsertPromptEvent(ctx context.Context, e *models.PromptEvent) error { return nil }
 func (m *mockStore) InsertClassification(ctx context.Context, c *models.Classification) error { return nil }
@@ -66,5 +74,29 @@ func TestAggregate_CalculatesSummary(t *testing.T) {
 	
 	if summary.TotalSessions != 2 {
 		t.Errorf("expected 2 sessions, got %d", summary.TotalSessions)
+	}
+}
+
+func TestDailyStats(t *testing.T) {
+	now := time.Now()
+	
+	// Create events across two different days
+	events := []models.PromptEvent{
+		{ID: "1", Timestamp: now, Agent: "cursor", Project: "projA"},
+		{ID: "2", Timestamp: now.Add(24 * time.Hour), Agent: "cursor", Project: "projA"},
+	}
+	
+	stats := dailyStats(events, now.Add(-time.Hour), now.Add(48*time.Hour))
+	
+	// Should have 2 days in the stats
+	if len(stats) != 2 {
+		t.Errorf("expected 2 days of stats, got %d", len(stats))
+	}
+	
+	if stats[0].Prompts != 1 {
+		t.Errorf("expected 1 prompt on day 1, got %d", stats[0].Prompts)
+	}
+	if stats[1].Prompts != 1 {
+		t.Errorf("expected 1 prompt on day 2, got %d", stats[1].Prompts)
 	}
 }

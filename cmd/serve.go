@@ -29,7 +29,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	}
 	defer cleanup()
 
-	registry := newAgentRegistry()
+	registry := newAgentRegistry(cfg)
 
 	level := slog.LevelInfo
 	if cfg.Daemon.LogLevel == "debug" {

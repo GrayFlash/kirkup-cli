@@ -22,7 +22,7 @@ var (
 
 var exportCmd = &cobra.Command{
 	Use:   "export",
-	Short: "Export collected events as JSON",
+	Short: "Export prompt events to JSON or CSV",
 	RunE:  runExport,
 }
 

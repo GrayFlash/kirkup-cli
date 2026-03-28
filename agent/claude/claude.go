@@ -11,7 +11,6 @@ import (
 	"github.com/GrayFlash/kirkup-cli/models"
 )
 
-// Adapter collects prompt events from Claude Code JSONL session logs.
 type Adapter struct{}
 
 func New() *Adapter { return &Adapter{} }
@@ -23,7 +22,7 @@ func (a *Adapter) Detect() bool {
 	if !ok {
 		return false
 	}
-	_, err := os.Stat(filepath.Join(base, "projects"))
+	_, err := os.Stat(base)
 	return err == nil
 }
 
@@ -32,25 +31,11 @@ func (a *Adapter) WatchGlobs() []string {
 	if !ok {
 		return nil
 	}
-	return []string{filepath.Join(base, "projects", "*", "*.jsonl")}
+	// Claude Code stores logs in projects folders
+	return []string{filepath.Join(base, "projects", "*", "conversation.jsonl")}
 }
 
-// logEntry represents a single line in a Claude Code JSONL session file.
-type logEntry struct {
-	Type        string    `json:"type"`
-	UUID        string    `json:"uuid"`
-	Timestamp   time.Time `json:"timestamp"`
-	CWD         string    `json:"cwd"`
-	SessionID   string    `json:"sessionId"`
-	GitBranch   string    `json:"gitBranch"`
-	IsSidechain bool      `json:"isSidechain"`
-	Message     struct {
-		Role    string          `json:"role"`
-		Content json.RawMessage `json:"content"`
-	} `json:"message"`
-}
-
-func (a *Adapter) Events(_ context.Context, path string) ([]models.PromptEvent, error) {
+func (a *Adapter) Events(ctx context.Context, path string) ([]models.PromptEvent, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -59,78 +44,41 @@ func (a *Adapter) Events(_ context.Context, path string) ([]models.PromptEvent, 
 
 	var events []models.PromptEvent
 	scanner := bufio.NewScanner(f)
-	// Claude JSONL lines can be long; increase buffer to 1 MB.
-	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 1024*1024)
-
 	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+		var msg chatMessage
+		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
 			continue
 		}
-
-		var entry logEntry
-		if err := json.Unmarshal(line, &entry); err != nil {
+		if msg.Role != "user" {
 			continue
 		}
-
-		if entry.Type != "user" || entry.IsSidechain {
-			continue
-		}
-
-		prompt := extractPrompt(entry.Message.Content)
-		if prompt == "" {
-			continue
-		}
-
 		events = append(events, models.PromptEvent{
-			Timestamp:  entry.Timestamp,
-			Agent:      a.Name(),
-			SessionID:  entry.SessionID,
-			Prompt:     prompt,
-			WorkingDir: entry.CWD,
-			GitBranch:  entry.GitBranch,
+			Agent:     "claude-code",
+			Timestamp: msg.timestamp(),
+			Prompt:    msg.Content,
+			RawSource: msg.ProjectID,
 		})
 	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	return events, nil
+	return events, scanner.Err()
 }
 
-// extractPrompt pulls the human-readable text from a message content field.
-// Content may be a plain string or a JSON array of content blocks.
-// Returns "" when the content contains only tool_result blocks (no real prompt).
-func extractPrompt(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-
-	// Try plain string first.
-	var s string
-	if err := json.Unmarshal(raw, &s); err == nil {
-		return s
-	}
-
-	// Try array of content blocks.
-	var blocks []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
-	if err := json.Unmarshal(raw, &blocks); err != nil {
-		return ""
-	}
-
-	for _, b := range blocks {
-		if b.Type == "text" && b.Text != "" {
-			return b.Text
-		}
-	}
-	return ""
+type chatMessage struct {
+	ProjectID string `json:"projectId"`
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"createdAt"`
 }
 
-// claudeBase returns the ~/.claude directory.
+func (m chatMessage) timestamp() time.Time {
+	t, _ := time.Parse(time.RFC3339, m.CreatedAt)
+	return t
+}
+
 func claudeBase() (string, bool) {
 	home, err := os.UserHomeDir()
 	if err != nil {

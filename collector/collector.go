@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 
@@ -30,6 +31,11 @@ type Collector struct {
 	mu           sync.Mutex
 	cancel       context.CancelFunc
 	done         chan struct{}
+
+	statsProcessed int
+	statsNew       int
+
+	redactionPatterns []*regexp.Regexp
 }
 
 // New creates a Collector. Call Start to begin watching.
@@ -37,7 +43,7 @@ func New(agents *agent.Registry, s store.Store, cfg *config.Config, log *slog.Lo
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Collector{
+	c := &Collector{
 		agents:       agents,
 		store:        s,
 		cfg:          cfg,
@@ -46,6 +52,24 @@ func New(agents *agent.Registry, s store.Store, cfg *config.Config, log *slog.Lo
 		seenProjects: make(map[string]struct{}),
 		done:         make(chan struct{}),
 	}
+
+	if cfg.Privacy.Redact {
+		patterns := cfg.Privacy.Patterns
+		if len(patterns) == 0 {
+			patterns = []string{
+				`sk-[a-zA-Z0-9]{48}`,                // OpenAI
+				`ghp_[a-zA-Z0-9]{36}`,               // GitHub
+				`xoxb-[0-9]{11,13}-[a-zA-Z0-9]{24}`, // Slack
+			}
+		}
+		for _, p := range patterns {
+			if re, err := regexp.Compile(p); err == nil {
+				c.redactionPatterns = append(c.redactionPatterns, re)
+			}
+		}
+	}
+
+	return c
 }
 
 // Start performs an initial scan of all agent files, then watches for changes.
@@ -118,6 +142,37 @@ func (c *Collector) Stop() {
 	<-c.done
 }
 
+// LoadSeen populates the in-memory deduplication map from the store.
+func (c *Collector) LoadSeen(ctx context.Context) error {
+	ids, err := c.store.ListEventIDs(ctx)
+	if err != nil {
+		return fmt.Errorf("list event ids: %w", err)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, id := range ids {
+		c.seen[id] = struct{}{}
+	}
+	return nil
+}
+
+// Scan performs a one-shot scan of all agent log files and returns the number
+// of events processed and the number of new events stored.
+func (c *Collector) Scan(ctx context.Context) (processed, new int) {
+	c.mu.Lock()
+	c.statsProcessed = 0
+	c.statsNew = 0
+	c.mu.Unlock()
+
+	c.syncConfigProjects(ctx)
+	globs := c.collectGlobs()
+	c.scanAll(ctx, globs)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.statsProcessed, c.statsNew
+}
+
 // scanAll expands all globs and processes each matching file.
 func (c *Collector) scanAll(ctx context.Context, globs []globEntry) {
 	for _, g := range globs {
@@ -159,6 +214,10 @@ func (c *Collector) processFile(ctx context.Context, a agent.Adapter, path strin
 	for i := range events {
 		e := &events[i]
 
+		c.mu.Lock()
+		c.statsProcessed++
+		c.mu.Unlock()
+
 		// Deterministic ID for deduplication.
 		e.ID = eventID(e)
 
@@ -172,6 +231,9 @@ func (c *Collector) processFile(ctx context.Context, a agent.Adapter, path strin
 		if already {
 			continue
 		}
+
+		// Redact secrets
+		e.Prompt = c.redact(e.Prompt)
 
 		// Enrich with git context if we have a working directory.
 		if e.WorkingDir != "" && (e.GitRemote == "" || e.GitBranch == "") {
@@ -191,7 +253,13 @@ func (c *Collector) processFile(ctx context.Context, a agent.Adapter, path strin
 
 		if err := c.store.InsertPromptEvent(ctx, e); err != nil {
 			c.log.Error("store insert", "err", err)
+			c.mu.Lock()
+			delete(c.seen, e.ID)
+			c.mu.Unlock()
 		} else {
+			c.mu.Lock()
+			c.statsNew++
+			c.mu.Unlock()
 			c.log.Debug("stored event",
 				"agent", e.Agent,
 				"project", e.Project,
@@ -312,3 +380,14 @@ func truncate(s string, n int) string {
 	return s[:n] + "…"
 }
 
+
+func (c *Collector) redact(prompt string) string {
+	if len(c.redactionPatterns) == 0 {
+		return prompt
+	}
+	out := prompt
+	for _, re := range c.redactionPatterns {
+		out = re.ReplaceAllString(out, "[REDACTED]")
+	}
+	return out
+}

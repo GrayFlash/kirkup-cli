@@ -67,7 +67,7 @@ type providerOpts struct {
 	} `json:"cursor"`
 }
 
-func (a *Adapter) Events(_ context.Context, path string) ([]models.PromptEvent, error) {
+func (a *Adapter) Events(ctx context.Context, path string) ([]models.PromptEvent, error) {
 	db, err := sql.Open("sqlite", path+"?mode=ro")
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func (a *Adapter) Events(_ context.Context, path string) ([]models.PromptEvent, 
 
 	cwd := resolveWorkspace(path)
 
-	rows, err := db.Query("SELECT data FROM blobs")
+	rows, err := db.QueryContext(ctx, "SELECT data FROM blobs")
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +89,11 @@ func (a *Adapter) Events(_ context.Context, path string) ([]models.PromptEvent, 
 
 	var events []models.PromptEvent
 	for rows.Next() {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
 		var data []byte
 		if err := rows.Scan(&data); err != nil {
 			continue

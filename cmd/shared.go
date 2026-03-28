@@ -11,17 +11,32 @@ import (
 	"github.com/GrayFlash/kirkup-cli/agent/claude"
 	"github.com/GrayFlash/kirkup-cli/agent/cursor"
 	"github.com/GrayFlash/kirkup-cli/agent/gemini"
+	"github.com/GrayFlash/kirkup-cli/agent/generic"
 	"github.com/GrayFlash/kirkup-cli/config"
 	"github.com/GrayFlash/kirkup-cli/store"
+	"github.com/GrayFlash/kirkup-cli/store/postgres"
 	"github.com/GrayFlash/kirkup-cli/store/sqlite"
 )
 
-func newAgentRegistry() *agent.Registry {
-	return agent.NewRegistry(
+func newAgentRegistry(cfg *config.Config) *agent.Registry {
+	adapters := []agent.Adapter{
 		gemini.New(),
 		cursor.New(),
 		claude.New(),
-	)
+	}
+
+	if cfg != nil {
+		for name, ac := range cfg.Agents {
+			if name == "gemini-cli" || name == "cursor" || name == "claude-code" {
+				continue
+			}
+			if ac.Enabled && ac.PromptField != "" {
+				adapters = append(adapters, generic.New(name, ac))
+			}
+		}
+	}
+
+	return agent.NewRegistry(adapters...)
 }
 
 func openApp() (*config.Config, store.Store, func(), error) {
@@ -139,6 +154,8 @@ func loadConfig() (*config.Config, error) {
 
 func openStore(cfg *config.Config) (store.Store, error) {
 	switch cfg.Store.Driver {
+	case "postgres":
+		return postgres.Open(cfg.Store.PG.DSN)
 	case "sqlite", "":
 		s, err := sqlite.Open(cfg.Store.SQLite.Path)
 		if err != nil {

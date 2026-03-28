@@ -28,36 +28,30 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		fmt.Println("daemon:  stopped")
 	}
 
+	// Events today
+	cfg, s, cleanup, err := openApp()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
 	// Agent detection
-	registry := newAgentRegistry()
+	registry := newAgentRegistry(cfg)
 	fmt.Println()
 	fmt.Println("agents:")
 	for _, a := range registry.All() {
 		status := "not detected"
 		if a.Detect() {
-			status = "detected"
+			status = "detected ✓"
 		}
 		fmt.Printf("  %-14s %s\n", a.Name(), status)
 	}
 
-	// Events today (best-effort — skip if config or store unavailable)
-	cfg, err := loadConfig()
-	if err != nil {
-		return nil
-	}
-	s, err := openStore(cfg)
-	if err != nil {
-		return nil
-	}
-	defer func() { _ = s.Close() }()
-
 	midnight := today()
 	events, err := s.QueryPromptEvents(context.Background(), store.EventFilter{Since: &midnight})
 	if err != nil {
-		return nil
+		return err
 	}
 	fmt.Printf("\nevents today: %d\n", len(events))
 	return nil
 }
-
-// today returns midnight of the current local day in UTC.

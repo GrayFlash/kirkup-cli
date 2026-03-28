@@ -15,18 +15,33 @@ type Config struct {
 	Projects   []ProjectConfig        `yaml:"projects"`
 	Sessions   SessionsConfig         `yaml:"sessions"`
 	Classifier ClassifierConfig       `yaml:"classifier"`
+	Privacy    PrivacyConfig          `yaml:"privacy"`
+}
+
+type PrivacyConfig struct {
+	Redact   bool     `yaml:"redact"`
+	Patterns []string `yaml:"patterns"`
 }
 
 type ClassifierConfig struct {
 	Mode        string       `yaml:"mode"`
-	CustomRules []CustomRule `yaml:"custom_rules"`
+	CustomRules []RuleConfig `yaml:"custom_rules"`
+	LLM         LLMConfig    `yaml:"llm"`
 }
 
-type CustomRule struct {
+type RuleConfig struct {
 	Category string   `yaml:"category"`
 	Keywords []string `yaml:"keywords"`
 	Patterns []string `yaml:"patterns"`
 	Priority int      `yaml:"priority"`
+}
+
+type LLMConfig struct {
+	Provider  string `yaml:"provider"`
+	Model     string `yaml:"model"`
+	Endpoint  string `yaml:"endpoint"`
+	APIKey    string `yaml:"api_key"`
+	BatchSize int    `yaml:"batch_size"`
 }
 
 type ProjectConfig struct {
@@ -45,17 +60,30 @@ type SessionsConfig struct {
 }
 
 type StoreConfig struct {
-	Driver string       `yaml:"driver"`
-	SQLite SQLiteConfig `yaml:"sqlite"`
+	Driver string         `yaml:"driver"` // sqlite or postgres
+	SQLite SQLiteConfig   `yaml:"sqlite"`
+	PG     PostgresConfig `yaml:"postgres"`
 }
 
 type SQLiteConfig struct {
 	Path string `yaml:"path"`
 }
 
+type PostgresConfig struct {
+	DSN string `yaml:"dsn"`
+}
+
 type AgentConfig struct {
 	Enabled  bool     `yaml:"enabled"`
 	LogPaths []string `yaml:"log_paths"`
+
+	// Generic parsing support
+	Format         string `yaml:"format"`           // "json" or "jsonl"
+	PromptField    string `yaml:"prompt_field"`
+	TimestampField string `yaml:"timestamp_field"`
+	SessionIDField string `yaml:"session_id_field"`
+	RoleField      string `yaml:"role_field"`
+	UserRoleValue  string `yaml:"user_role_value"`
 }
 
 type DaemonConfig struct {
@@ -76,6 +104,9 @@ func Load(path string) (*Config, error) {
 	}
 
 	cfg.Store.SQLite.Path = ExpandHome(cfg.Store.SQLite.Path)
+	if cfg.Agents == nil {
+		cfg.Agents = make(map[string]AgentConfig)
+	}
 	for name, agent := range cfg.Agents {
 		for i, p := range agent.LogPaths {
 			agent.LogPaths[i] = ExpandHome(p)
@@ -88,6 +119,19 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Sessions.GapThresholdMinutes < 1 {
 		cfg.Sessions.GapThresholdMinutes = 1
+	}
+
+	// Validate driver and mode
+	switch cfg.Store.Driver {
+	case "sqlite", "postgres":
+	default:
+		cfg.Store.Driver = "sqlite"
+	}
+
+	switch cfg.Classifier.Mode {
+	case "rules", "llm", "both":
+	default:
+		cfg.Classifier.Mode = "rules"
 	}
 
 	return cfg, nil

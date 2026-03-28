@@ -3,8 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
 
 	"github.com/spf13/cobra"
 
@@ -13,9 +11,9 @@ import (
 )
 
 var (
-	classifyReclassify   bool
-	classifyMode         string
-	classifyReconfigure  bool
+	classifyReclassify  bool
+	classifyMode        string
+	classifyReconfigure bool
 )
 
 var classifyCmd = &cobra.Command{
@@ -37,22 +35,7 @@ func runClassify(_ *cobra.Command, _ []string) error {
 		if err != nil {
 			return err
 		}
-		editor := os.Getenv("EDITOR")
-		if editor == "" {
-			editor = os.Getenv("VISUAL")
-		}
-		if editor == "" {
-			return fmt.Errorf("$EDITOR is not set; open %s manually", cfgPath)
-		}
-		cmd := exec.Command(editor, cfgPath)
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
-	}
-
-	if classifyMode != "rules" {
-		return fmt.Errorf("unsupported mode %q: only \"rules\" is available in this version", classifyMode)
+		return openInEditor(cfgPath)
 	}
 
 	cfg, s, cleanup, err := openApp()
@@ -61,29 +44,50 @@ func runClassify(_ *cobra.Command, _ []string) error {
 	}
 	defer cleanup()
 
-	ctx := context.Background()
-
-	rc := classifier.NewRuleClassifier()
-	for _, r := range cfg.Classifier.CustomRules {
-		rc.AddRule(r.Category, r.Keywords, r.Patterns, r.Priority)
+	mode := cfg.Classifier.Mode
+	if classifyMode != "" {
+		mode = classifyMode
 	}
+
+	var cl classifier.Classifier
+	switch mode {
+	case "llm":
+		cl = classifier.NewLLMClassifier(cfg.Classifier.LLM)
+	case "rules", "":
+		rc := classifier.NewRuleClassifier()
+		for _, r := range cfg.Classifier.CustomRules {
+			rc.AddRule(r.Category, r.Keywords, r.Patterns, r.Priority)
+		}
+		cl = rc
+	default:
+		return fmt.Errorf("unsupported mode %q", mode)
+	}
+
+	ctx := context.Background()
 
 	if classifyReclassify {
 		all, err := s.QueryPromptEvents(ctx, store.EventFilter{})
 		if err != nil {
 			return fmt.Errorf("query events: %w", err)
 		}
-		classifications, err := rc.Classify(ctx, all)
+		fmt.Printf("classifying %d events using %s...\n", len(all), cl.Name())
+		classifications, err := cl.Classify(ctx, all)
 		if err != nil {
 			return err
 		}
 		inserted := 0
+		errs := 0
 		for i := range classifications {
 			if err := s.InsertClassification(ctx, &classifications[i]); err == nil {
 				inserted++
+			} else {
+				errs++
 			}
 		}
 		fmt.Printf("reclassified %d / %d events\n", inserted, len(all))
+		if errs > 0 {
+			fmt.Printf("warning: failed to insert %d classifications\n", errs)
+		}
 		return nil
 	}
 
@@ -97,15 +101,19 @@ func runClassify(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	classifications, err := rc.Classify(ctx, unclassified)
+	fmt.Printf("classifying %d events using %s...\n", len(unclassified), cl.Name())
+	classifications, err := cl.Classify(ctx, unclassified)
 	if err != nil {
 		return err
 	}
 
 	inserted := 0
+	errs := 0
 	for i := range classifications {
 		if err := s.InsertClassification(ctx, &classifications[i]); err == nil {
 			inserted++
+		} else {
+			errs++
 		}
 	}
 
@@ -115,5 +123,8 @@ func runClassify(_ *cobra.Command, _ []string) error {
 		fmt.Printf(" (%d did not match any rule)", skipped)
 	}
 	fmt.Println()
+	if errs > 0 {
+		fmt.Printf("warning: failed to insert %d classifications\n", errs)
+	}
 	return nil
 }

@@ -103,16 +103,19 @@ var defaultRules = []rawRule{
 	{
 		Category: "debugging",
 		Keywords: []string{"debug", "fix bug", "why is", "why does", "not working", "broken", "failing", "error", "exception", "crash", "panic", "stacktrace", "traceback"},
+		Patterns: []string{`(?i)fix.*bug`, `(?i)fix.*error`, `(?i)why is.*failing`},
 		Priority: 10,
 	},
 	{
 		Category: "testing",
 		Keywords: []string{"test", "spec", "assert", "coverage", "mock", "stub", "fixture", "benchmark"},
+		Patterns: []string{`(?i)write.*test`, `(?i)add.*test`},
 		Priority: 9,
 	},
 	{
 		Category: "refactoring",
 		Keywords: []string{"refactor", "extract", "rename", "restructure", "clean up", "cleanup", "reorganize", "simplify", "decouple", "move"},
+		Patterns: []string{`(?i)refactor.*to`, `(?i)extract.*method`},
 		Priority: 8,
 	},
 	{
