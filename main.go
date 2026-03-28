@@ -17,6 +17,6 @@ var defaultConfig []byte
 
 func main() {
 	cmd.DefaultConfig = defaultConfig
-	cmd.Version = version
+	cmd.Version = version + " (" + commit + ") " + date
 	cmd.Execute()
 }

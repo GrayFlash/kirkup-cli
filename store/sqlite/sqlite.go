@@ -82,7 +82,7 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 	if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("enable foreign keys: %w", err)
 	}
 	return &Store{db: db}, nil

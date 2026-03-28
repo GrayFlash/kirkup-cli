@@ -14,12 +14,20 @@ func TestGitContext_Timeout(t *testing.T) {
 	fakeGit := tmp + "/git"
 	
 	script := "#!/bin/sh\nsleep 10\n"
-	os.WriteFile(fakeGit, []byte(script), 0755)
+	if err := os.WriteFile(fakeGit, []byte(script), 0755); err != nil {
+		t.Fatalf("failed to write fake git: %v", err)
+	}
 	
 	// Prepend our fake git to PATH
 	oldPath := os.Getenv("PATH")
-	os.Setenv("PATH", tmp+":"+oldPath)
-	defer os.Setenv("PATH", oldPath)
+	if err := os.Setenv("PATH", tmp+":"+oldPath); err != nil {
+		t.Fatalf("failed to set PATH: %v", err)
+	}
+	defer func() {
+		if err := os.Setenv("PATH", oldPath); err != nil {
+			t.Logf("failed to restore PATH: %v", err)
+		}
+	}()
 	
 	start := time.Now()
 	

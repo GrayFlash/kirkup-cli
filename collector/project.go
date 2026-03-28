@@ -17,8 +17,9 @@ import (
 func ResolveProject(projects []config.ProjectConfig, gitRemote, workingDir string) string {
 	// 1. Match by git remote
 	if gitRemote != "" {
+		normalisedIn := normaliseRemote(gitRemote)
 		for _, p := range projects {
-			if normaliseRemote(p.Match.GitRemote) == gitRemote {
+			if normaliseRemote(p.Match.GitRemote) == normalisedIn {
 				return p.Name
 			}
 		}

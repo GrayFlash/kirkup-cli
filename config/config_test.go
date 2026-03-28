@@ -34,3 +34,63 @@ sessions:
 		t.Errorf("expected GapThresholdMinutes to be > 0, got %d", cfg.Sessions.GapThresholdMinutes)
 	}
 }
+
+func TestConfig_MergeDefaults(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+	
+	// Write an empty config file
+	if err := os.WriteFile(path, []byte(""), 0644); err != nil {
+		t.Fatalf("failed to write test config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	// Verify defaults were applied
+	if cfg.Store.Driver != "sqlite" {
+		t.Errorf("expected default driver sqlite, got %s", cfg.Store.Driver)
+	}
+	if cfg.Daemon.PollIntervalSeconds != 5 {
+		t.Errorf("expected default poll interval 5, got %d", cfg.Daemon.PollIntervalSeconds)
+	}
+}
+
+func TestConfig_InvalidYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+	
+	// Write malformed YAML
+	if err := os.WriteFile(path, []byte("invalid:\n  - yaml\n    bad: indentation"), 0644); err != nil {
+		t.Fatalf("failed to write test config: %v", err)
+	}
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for invalid YAML, got nil")
+	}
+}
+
+func TestExpandHome(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("UserHomeDir not available")
+	}
+
+	path := "~/test/dir"
+	expected := filepath.Join(home, "test/dir")
+	
+	result := ExpandHome(path)
+	if result != expected {
+		t.Errorf("ExpandHome() = %v, want %v", result, expected)
+	}
+
+	// Non-tilde paths should be unchanged
+	path2 := "/absolute/path"
+	result2 := ExpandHome(path2)
+	if result2 != path2 {
+		t.Errorf("ExpandHome() = %v, want %v", result2, path2)
+	}
+}

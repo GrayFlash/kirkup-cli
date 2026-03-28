@@ -5,9 +5,7 @@ store:
   driver: sqlite
   sqlite:
     path: ~/.kirkup/kirkup.db
-  # Postgres (uncomment to use instead of SQLite)
-  # postgres:
-  #   dsn: postgres://user:pass@localhost:5432/kirkup?sslmode=disable
+  # NOTE: Postgres support is planned for v0.2.0
 
 # Agent log sources — kirkup auto-detects installed agents.
 # Override log paths here only if your setup is non-standard.
@@ -36,20 +34,13 @@ projects: []
 
 # Classification
 classifier:
-  mode: rules             # rules | llm | both
+  mode: rules             # rules (LLM classification planned for v0.2.0)
   custom_rules: []
   # Example custom rule:
   # custom_rules:
   #   - category: rework
   #     keywords: ["spec changed", "requirement changed"]
   #     priority: 10
-  #
-  # LLM classifier (mode: llm or both):
-  # llm:
-  #   provider: ollama    # ollama | openai | anthropic
-  #   model: llama3
-  #   endpoint: http://localhost:11434
-  #   batch_size: 50
 
 # Session inference
 sessions:
