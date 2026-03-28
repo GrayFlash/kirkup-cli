@@ -55,15 +55,11 @@ func runClassify(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("unsupported mode %q: only \"rules\" is available in this version", classifyMode)
 	}
 
-	cfg, err := loadConfig()
+	cfg, s, cleanup, err := openApp()
 	if err != nil {
 		return err
 	}
-	s, err := openStore(cfg)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = s.Close() }()
+	defer cleanup()
 
 	ctx := context.Background()
 

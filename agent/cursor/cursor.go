@@ -133,6 +133,9 @@ func (a *Adapter) Events(_ context.Context, path string) ([]models.PromptEvent, 
 			RawSource:  sessionID,
 		})
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return events, nil
 }
 

@@ -32,15 +32,11 @@ func init() {
 }
 
 func runEvents(_ *cobra.Command, _ []string) error {
-	cfg, err := loadConfig()
+	_, s, cleanup, err := openApp()
 	if err != nil {
 		return err
 	}
-	s, err := openStore(cfg)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = s.Close() }()
+	defer cleanup()
 
 	ctx := context.Background()
 
@@ -104,10 +100,7 @@ func printEvent(ts time.Time, agent, project, prompt string) {
 	if proj == "" {
 		proj = "-"
 	}
-	truncated := prompt
-	if len(truncated) > 80 {
-		truncated = truncated[:80] + "…"
-	}
+	truncated := truncateStr(prompt, 80)
 	fmt.Printf("%s  %-12s  %-16s  %s\n",
 		ts.Local().Format("2006-01-02 15:04:05"),
 		agent, proj, truncated,

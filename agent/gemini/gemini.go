@@ -18,13 +18,19 @@ func New() *Adapter { return &Adapter{} }
 func (a *Adapter) Name() string { return "gemini-cli" }
 
 func (a *Adapter) Detect() bool {
-	home, _ := os.UserHomeDir()
-	_, err := os.Stat(filepath.Join(home, ".gemini"))
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(filepath.Join(home, ".gemini"))
 	return err == nil
 }
 
 func (a *Adapter) WatchGlobs() []string {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
 	return []string{filepath.Join(home, ".gemini", "tmp", "*", "logs.json")}
 }
 

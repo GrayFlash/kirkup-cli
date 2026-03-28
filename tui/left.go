@@ -36,9 +36,10 @@ func renderLeft(projects []projectEntry, selected int, focused bool, width, heig
 			nameLen = 0
 		}
 		
-		if len(name) > nameLen && nameLen > 0 {
-			name = name[:nameLen-1] + "…"
-		} else if len(name) > nameLen && nameLen == 0 {
+		runes := []rune(name)
+		if len(runes) > nameLen && nameLen > 0 {
+			name = string(runes[:nameLen-1]) + "…"
+		} else if len(runes) > nameLen && nameLen == 0 {
 			name = ""
 		}
 

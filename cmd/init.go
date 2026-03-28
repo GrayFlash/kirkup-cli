@@ -8,10 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/GrayFlash/kirkup-cli/agent"
-	agentclaude "github.com/GrayFlash/kirkup-cli/agent/claude"
-	agentcursor "github.com/GrayFlash/kirkup-cli/agent/cursor"
-	agentgemini "github.com/GrayFlash/kirkup-cli/agent/gemini"
 	"github.com/GrayFlash/kirkup-cli/store/sqlite"
 )
 
@@ -62,11 +58,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	fmt.Printf("initialised database:  %s\n", dbPath)
 
 	// -- Agent detection --
-	registry := agent.NewRegistry(
-		agentgemini.New(),
-		agentcursor.New(),
-		agentclaude.New(),
-	)
+	registry := newAgentRegistry()
 
 	fmt.Println()
 	fmt.Println("agents:")
@@ -84,22 +76,8 @@ func runInit(_ *cobra.Command, _ []string) error {
 }
 
 // defaultConfigPath returns ~/.kirkup/config.yaml.
-func defaultConfigPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".kirkup", "config.yaml"), nil
-}
 
 // defaultDBPath returns ~/.kirkup/kirkup.db.
-func defaultDBPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".kirkup", "kirkup.db"), nil
-}
 
 // writeDefaultConfig writes data to dst, creating parent dirs as needed.
 func writeDefaultConfig(dst string, data []byte) error {

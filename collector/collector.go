@@ -312,17 +312,3 @@ func truncate(s string, n int) string {
 	return s[:n] + "…"
 }
 
-func uniqueStrings(ss []string) []string {
-	seen := make(map[string]struct{}, len(ss))
-	out := make([]string, 0, len(ss))
-	for _, s := range ss {
-		if _, ok := seen[s]; !ok {
-			seen[s] = struct{}{}
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
-// suppress unused warning — uniqueStrings is available for callers
-var _ = uniqueStrings

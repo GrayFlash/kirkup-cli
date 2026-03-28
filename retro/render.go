@@ -73,13 +73,13 @@ func renderProjects(ew *errWriter, s *Summary) {
 		if name == "" {
 			name = "(unknown)"
 		}
-		ew.printf(" %-34s %-10d %-9d %s\n", name, p.Sessions, p.Prompts, fmtDuration(p.EstTime))
+		ew.printf(" %-34s %-10d %-9d %s\n", name, p.Sessions, p.Prompts, FmtDuration(p.EstTime))
 		for _, b := range p.Branches {
 			ew.printf("   %-32s %d prompts\n", "  "+b.Name, b.Prompts)
 		}
 	}
 	ew.println(separator)
-	ew.printf(" %-34s %-10d %-9d %s\n", "Total", s.TotalSessions, s.TotalPrompts, fmtDuration(s.TotalEstTime))
+	ew.printf(" %-34s %-10d %-9d %s\n", "Total", s.TotalSessions, s.TotalPrompts, FmtDuration(s.TotalEstTime))
 	ew.println()
 }
 
@@ -161,7 +161,7 @@ func bar(percent float64) string {
 }
 
 // fmtDuration formats a duration as "~Xh" or "~Xm".
-func fmtDuration(d time.Duration) string {
+func FmtDuration(d time.Duration) string {
 	h := d.Hours()
 	if h >= 1 {
 		return fmt.Sprintf("~%.1fh", h)

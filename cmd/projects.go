@@ -22,15 +22,11 @@ func init() {
 }
 
 func runProjects(_ *cobra.Command, _ []string) error {
-	cfg, err := loadConfig()
+	_, s, cleanup, err := openApp()
 	if err != nil {
 		return err
 	}
-	s, err := openStore(cfg)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = s.Close() }()
+	defer cleanup()
 
 	ctx := context.Background()
 

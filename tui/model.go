@@ -273,20 +273,21 @@ func (m Model) loadSummary() tea.Cmd {
 			return summaryMsg{err: err}
 		}
 
-		// Build project list only on first load (selected == 0 and no projects yet).
+		// Fetch all events without project filter to build the list.
+		// We rebuild this if we are selecting 'All' (index 0) or if projects is empty,
+		// but really we want to rebuild it whenever period changes.
+		// A cleaner way is just to always rebuild the project list when loading summary.
+		// To avoid losing selection, we'll keep the current selection index.
 		var projects []projectEntry
-		if len(m.projects) == 0 {
-			// Fetch all events without project filter to build the list.
-			allSummary, err := retro.Aggregate(
-				context.Background(), m.store,
-				from, to, "",
-				m.gapMinutes,
-			)
-			if err == nil {
-				projects = append(projects, projectEntry{name: "", prompts: allSummary.TotalPrompts})
-				for _, p := range allSummary.Projects {
-					projects = append(projects, projectEntry{name: p.Name, prompts: p.Prompts})
-				}
+		allSummary, err := retro.Aggregate(
+			context.Background(), m.store,
+			from, to, "",
+			m.gapMinutes,
+		)
+		if err == nil {
+			projects = append(projects, projectEntry{name: "", prompts: allSummary.TotalPrompts})
+			for _, p := range allSummary.Projects {
+				projects = append(projects, projectEntry{name: p.Name, prompts: p.Prompts})
 			}
 		}
 
@@ -299,10 +300,3 @@ func truncDay(t time.Time) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
 }
 
-func fmtDuration(d time.Duration) string {
-	h := d.Hours()
-	if h >= 1 {
-		return fmt.Sprintf("~%.1fh", h)
-	}
-	return fmt.Sprintf("~%.0fm", d.Minutes())
-}

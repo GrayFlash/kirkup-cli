@@ -30,7 +30,7 @@ func renderRight(summary *retro.Summary, focused bool, width, height int) string
 	stats := fmt.Sprintf("%s prompts  ·  %s sessions  ·  %s",
 		styleStat.Render(fmt.Sprintf("%d", summary.TotalPrompts)),
 		styleStat.Render(fmt.Sprintf("%d", summary.TotalSessions)),
-		styleStat.Render(fmtDuration(summary.TotalEstTime)),
+		styleStat.Render(retro.FmtDuration(summary.TotalEstTime)),
 	)
 	sections = append(sections, stats, "")
 
@@ -113,7 +113,7 @@ func renderRight(summary *retro.Summary, focused bool, width, height int) string
 				lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Render(name),
 				styleStat.Render(fmt.Sprintf("%d", p.Sessions)),
 				styleStat.Render(fmt.Sprintf("%d", p.Prompts)),
-				styleMuted.Render(fmtDuration(p.EstTime)),
+				styleMuted.Render(retro.FmtDuration(p.EstTime)),
 			))
 			for _, b := range p.Branches {
 				sections = append(sections, styleMuted.Render(fmt.Sprintf("   %-22s %d prompts", b.Name, b.Prompts)))

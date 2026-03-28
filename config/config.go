@@ -66,7 +66,7 @@ type DaemonConfig struct {
 func Load(path string) (*Config, error) {
 	cfg := defaults()
 
-	data, err := os.ReadFile(expandHome(path))
+	data, err := os.ReadFile(ExpandHome(path))
 	if err != nil {
 		return nil, err
 	}
@@ -75,10 +75,10 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
-	cfg.Store.SQLite.Path = expandHome(cfg.Store.SQLite.Path)
+	cfg.Store.SQLite.Path = ExpandHome(cfg.Store.SQLite.Path)
 	for name, agent := range cfg.Agents {
 		for i, p := range agent.LogPaths {
-			agent.LogPaths[i] = expandHome(p)
+			agent.LogPaths[i] = ExpandHome(p)
 		}
 		cfg.Agents[name] = agent
 	}
@@ -111,10 +111,13 @@ func defaults() *Config {
 	}
 }
 
-func expandHome(path string) string {
+func ExpandHome(path string) string {
 	if !strings.HasPrefix(path, "~/") {
 		return path
 	}
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path // Fallback to raw if home can't be resolved
+	}
 	return filepath.Join(home, path[2:])
 }

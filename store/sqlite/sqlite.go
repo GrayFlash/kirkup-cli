@@ -81,12 +81,19 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
+	if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("enable foreign keys: %w", err)
+	}
 	return &Store{db: db}, nil
 }
 
 func (s *Store) Migrate(_ context.Context) error {
 	_, err := s.db.Exec(schema)
-	return err
+	if err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) Close() error {
@@ -360,7 +367,10 @@ func (s *Store) ListProjects(ctx context.Context) ([]models.Project, error) {
 
 func newID() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to random string if crypto/rand fails (should be rare)
+		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+	}
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 

@@ -3,14 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/GrayFlash/kirkup-cli/agent"
-	agentclaude "github.com/GrayFlash/kirkup-cli/agent/claude"
-	agentcursor "github.com/GrayFlash/kirkup-cli/agent/cursor"
-	agentgemini "github.com/GrayFlash/kirkup-cli/agent/gemini"
 	"github.com/GrayFlash/kirkup-cli/store"
 )
 
@@ -34,11 +29,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	}
 
 	// Agent detection
-	registry := agent.NewRegistry(
-		agentgemini.New(),
-		agentcursor.New(),
-		agentclaude.New(),
-	)
+	registry := newAgentRegistry()
 	fmt.Println()
 	fmt.Println("agents:")
 	for _, a := range registry.All() {
@@ -70,8 +61,3 @@ func runStatus(_ *cobra.Command, _ []string) error {
 }
 
 // today returns midnight of the current local day in UTC.
-func today() time.Time {
-	now := time.Now()
-	y, m, d := now.Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, now.Location())
-}
