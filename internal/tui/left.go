@@ -30,11 +30,20 @@ func renderLeft(projects []projectEntry, selected int, focused bool, width, heig
 		if name == "" {
 			name = "(unknown)"
 		}
-		if len(name) > contentW-6 {
-			name = name[:contentW-7] + "…"
+		
+		nameLen := contentW - 7
+		if nameLen < 0 {
+			nameLen = 0
+		}
+		
+		runes := []rune(name)
+		if len(runes) > nameLen && nameLen > 0 {
+			name = string(runes[:nameLen-1]) + "…"
+		} else if len(runes) > nameLen && nameLen == 0 {
+			name = ""
 		}
 
-		label := fmt.Sprintf("%-*s %3dp", contentW-6, name, p.prompts)
+		label := fmt.Sprintf("%-*s %3dp", max(0, contentW-6), name, p.prompts)
 		if i == selected {
 			lines = append(lines, styleProjectSelected.Render(label))
 		} else {
@@ -54,7 +63,16 @@ func renderLeft(projects []projectEntry, selected int, focused bool, width, heig
 
 // renderBar renders a lipgloss-styled bar chart row.
 func renderBar(label string, pct float64, labelW, barW int) string {
-	filled := min(int(pct/100*float64(barW)), barW)
+	if barW < 0 {
+		barW = 0
+	}
+	filled := int(pct / 100 * float64(barW))
+	if filled > barW {
+		filled = barW
+	} else if filled < 0 {
+		filled = 0
+	}
+
 	bar := styleBar.Render(strings.Repeat("█", filled)) +
 		styleBarEmpty.Render(strings.Repeat("░", barW-filled))
 

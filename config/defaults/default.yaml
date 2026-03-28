@@ -1,0 +1,61 @@
+# ~/.kirkup/config.yaml — kirkup default configuration
+
+# Database
+store:
+  driver: sqlite          # sqlite or postgres
+  sqlite:
+    path: ~/.kirkup/kirkup.db
+  postgres:
+    dsn: "host=localhost port=5432 user=postgres password=postgres dbname=kirkup sslmode=disable"
+
+# Agent log sources — kirkup auto-detects installed agents.
+# Override log paths or add generic agents here.
+agents:
+  gemini-cli:
+    enabled: true
+  cursor:
+    enabled: true
+  # Example generic agent (custom JSONL log):
+  # my-custom-tool:
+  #   enabled: true
+  #   format: jsonl
+  #   log_paths: ["/path/to/logs/*.jsonl"]
+  #   prompt_field: "message"
+  #   timestamp_field: "created_at"
+  #   role_field: "author"
+  #   user_role_value: "human"
+
+# Project mapping — optional but recommended.
+projects: []
+# Example:
+#   - name: my-project
+#     display_name: "My Project"
+#     match:
+#       git_remote: "github.com/you/my-project"
+#       paths:
+#         - ~/work/my-project
+
+# Classification
+classifier:
+  mode: rules             # rules, llm, or both
+  custom_rules: []
+  llm:
+    provider: ollama      # ollama, openai, or anthropic
+    model: llama3         # or gpt-4o, claude-3-5-sonnet-20240620
+    endpoint: ""          # optional override
+    api_key: ""           # required for openai/anthropic
+    batch_size: 10
+
+# Privacy
+privacy:
+  redact: true            # strip API keys and tokens before storing
+  patterns: []            # optional custom regex patterns to redact
+
+# Session inference
+sessions:
+  gap_threshold_minutes: 30
+
+# Daemon
+daemon:
+  poll_interval_seconds: 5
+  log_level: info         # debug | info | warn | error

@@ -177,12 +177,13 @@ func Aggregate(ctx context.Context, s store.Store, from, to time.Time, project s
 }
 
 // inferSessions groups events into sessions by (project, agent) with a gap
+// inferSessions groups events into sessions separated by more than the gap
 // threshold. Events are sorted by timestamp within each group.
 func inferSessions(events []models.PromptEvent, gapMinutes int) []models.Session {
-	type key struct{ project, agent string }
+	type key struct{ project, agent, branch string }
 	groups := make(map[key][]models.PromptEvent)
 	for _, e := range events {
-		k := key{e.Project, e.Agent}
+		k := key{e.Project, e.Agent, e.GitBranch}
 		groups[k] = append(groups[k], e)
 	}
 
@@ -200,11 +201,18 @@ func inferSessions(events []models.PromptEvent, gapMinutes int) []models.Session
 
 		for _, e := range group[1:] {
 			if e.Timestamp.Sub(prev) > gap {
+				// End current session
+				ended := prev
+				// If session is very short, assume at least 5 mins of work.
+				if ended.Sub(start) < 5*time.Minute {
+					ended = start.Add(5 * time.Minute)
+				}
+
 				sessions = append(sessions, models.Session{
 					Project:             k.project,
 					Agent:               k.agent,
 					StartedAt:           start,
-					EndedAt:             prev,
+					EndedAt:             ended,
 					PromptCount:         count,
 					GapThresholdMinutes: gapMinutes,
 				})
@@ -214,11 +222,17 @@ func inferSessions(events []models.PromptEvent, gapMinutes int) []models.Session
 			prev = e.Timestamp
 			count++
 		}
+
+		// Final session
+		ended := prev
+		if ended.Sub(start) < 5*time.Minute {
+			ended = start.Add(5 * time.Minute)
+		}
 		sessions = append(sessions, models.Session{
 			Project:             k.project,
 			Agent:               k.agent,
 			StartedAt:           start,
-			EndedAt:             prev,
+			EndedAt:             ended,
 			PromptCount:         count,
 			GapThresholdMinutes: gapMinutes,
 		})

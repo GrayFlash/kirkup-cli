@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/GrayFlash/kirkup-cli/retro"
+	"github.com/GrayFlash/kirkup-cli/internal/retro"
 )
 
 // renderRight renders the summary panel.
@@ -30,7 +30,7 @@ func renderRight(summary *retro.Summary, focused bool, width, height int) string
 	stats := fmt.Sprintf("%s prompts  ·  %s sessions  ·  %s",
 		styleStat.Render(fmt.Sprintf("%d", summary.TotalPrompts)),
 		styleStat.Render(fmt.Sprintf("%d", summary.TotalSessions)),
-		styleStat.Render(fmtDuration(summary.TotalEstTime)),
+		styleStat.Render(retro.FmtDuration(summary.TotalEstTime)),
 	)
 	sections = append(sections, stats, "")
 
@@ -75,8 +75,22 @@ func renderRight(summary *retro.Summary, focused bool, width, height int) string
 			}
 			label := d.Date.Format("Mon Jan 2")
 			count := styleMuted.Render(fmt.Sprintf("%d prompts", d.Prompts))
-			bar := styleBar.Render(strings.Repeat("█", int(pct/100*float64(barW)))) +
-				styleBarEmpty.Render(strings.Repeat("░", barW-int(pct/100*float64(barW))))
+			
+			filled := int(pct / 100 * float64(barW))
+			if filled < 0 {
+				filled = 0
+			}
+			if filled > barW {
+				filled = barW
+			}
+			safeBarW := barW
+			if safeBarW < 0 {
+				safeBarW = 0
+				filled = 0
+			}
+
+			bar := styleBar.Render(strings.Repeat("█", filled)) +
+				styleBarEmpty.Render(strings.Repeat("░", safeBarW-filled))
 			sections = append(sections, fmt.Sprintf(" %-12s %s  %s",
 				lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Render(label),
 				bar,
@@ -99,7 +113,7 @@ func renderRight(summary *retro.Summary, focused bool, width, height int) string
 				lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Render(name),
 				styleStat.Render(fmt.Sprintf("%d", p.Sessions)),
 				styleStat.Render(fmt.Sprintf("%d", p.Prompts)),
-				styleMuted.Render(fmtDuration(p.EstTime)),
+				styleMuted.Render(retro.FmtDuration(p.EstTime)),
 			))
 			for _, b := range p.Branches {
 				sections = append(sections, styleMuted.Render(fmt.Sprintf("   %-22s %d prompts", b.Name, b.Prompts)))

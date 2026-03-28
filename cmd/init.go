@@ -7,12 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-
-	"github.com/GrayFlash/kirkup-cli/agent"
-	agentclaude "github.com/GrayFlash/kirkup-cli/agent/claude"
-	agentcursor "github.com/GrayFlash/kirkup-cli/agent/cursor"
-	agentgemini "github.com/GrayFlash/kirkup-cli/agent/gemini"
-	"github.com/GrayFlash/kirkup-cli/store/sqlite"
 )
 
 // DefaultConfig is set by main.go via go:embed so the binary always carries
@@ -46,27 +40,24 @@ func runInit(_ *cobra.Command, _ []string) error {
 	}
 
 	// -- Database --
-	dbPath, err := defaultDBPath()
+	cfg, s, cleanup, err := openApp()
 	if err != nil {
 		return err
 	}
-	s, err := sqlite.Open(dbPath)
-	if err != nil {
-		return fmt.Errorf("open database: %w", err)
-	}
-	defer func() { _ = s.Close() }()
+	defer cleanup()
 
 	if err := s.Migrate(context.Background()); err != nil {
 		return fmt.Errorf("migrate database: %w", err)
 	}
-	fmt.Printf("initialised database:  %s\n", dbPath)
+	
+	if cfg.Store.Driver == "postgres" {
+		fmt.Println("initialised postgres database")
+	} else {
+		fmt.Printf("initialised database:  %s\n", cfg.Store.SQLite.Path)
+	}
 
 	// -- Agent detection --
-	registry := agent.NewRegistry(
-		agentgemini.New(),
-		agentcursor.New(),
-		agentclaude.New(),
-	)
+	registry := newAgentRegistry(cfg)
 
 	fmt.Println()
 	fmt.Println("agents:")
@@ -84,22 +75,8 @@ func runInit(_ *cobra.Command, _ []string) error {
 }
 
 // defaultConfigPath returns ~/.kirkup/config.yaml.
-func defaultConfigPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".kirkup", "config.yaml"), nil
-}
 
 // defaultDBPath returns ~/.kirkup/kirkup.db.
-func defaultDBPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".kirkup", "kirkup.db"), nil
-}
 
 // writeDefaultConfig writes data to dst, creating parent dirs as needed.
 func writeDefaultConfig(dst string, data []byte) error {
@@ -114,7 +91,7 @@ func defaultConfigBytes() []byte {
 		return DefaultConfig
 	}
 	// Fallback for go run / tests where embed is not set.
-	if data, err := os.ReadFile("configs/default.yaml"); err == nil {
+	if data, err := os.ReadFile("config/defaults/default.yaml"); err == nil {
 		return data
 	}
 	return []byte(minimalConfig)

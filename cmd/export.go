@@ -22,7 +22,7 @@ var (
 
 var exportCmd = &cobra.Command{
 	Use:   "export",
-	Short: "Export collected events as JSON",
+	Short: "Export prompt events to JSON or CSV",
 	RunE:  runExport,
 }
 
@@ -35,32 +35,23 @@ func init() {
 }
 
 func runExport(_ *cobra.Command, _ []string) error {
-	cfg, err := loadConfig()
+	_, s, cleanup, err := openApp()
 	if err != nil {
 		return err
 	}
-	s, err := openStore(cfg)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = s.Close() }()
+	defer cleanup()
 
 	f := store.EventFilter{Project: exportProject}
 
-	if exportFrom != "" {
-		t, err := time.ParseInLocation("2006-01-02", exportFrom, time.Local)
-		if err != nil {
-			return fmt.Errorf("invalid --from date %q: use YYYY-MM-DD", exportFrom)
-		}
-		f.Since = &t
+	from, to, err := parseDateRange(exportFrom, exportTo)
+	if err != nil {
+		return err
 	}
-	if exportTo != "" {
-		t, err := time.ParseInLocation("2006-01-02", exportTo, time.Local)
-		if err != nil {
-			return fmt.Errorf("invalid --to date %q: use YYYY-MM-DD", exportTo)
-		}
-		end := t.Add(24*time.Hour - time.Second)
-		f.Until = &end
+	if !from.IsZero() {
+		f.Since = &from
+	}
+	if !to.IsZero() {
+		f.Until = &to
 	}
 
 	events, err := s.QueryPromptEvents(context.Background(), f)

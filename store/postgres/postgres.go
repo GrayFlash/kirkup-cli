@@ -1,25 +1,26 @@
-package sqlite
+package postgres
 
 import (
 	"context"
 	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
-
+	_ "github.com/lib/pq"
 	"github.com/GrayFlash/kirkup-cli/models"
 	"github.com/GrayFlash/kirkup-cli/store"
 )
 
+type Store struct {
+	db *sql.DB
+}
+
 const schema = `
 CREATE TABLE IF NOT EXISTS prompt_events (
 	id          TEXT PRIMARY KEY,
-	timestamp   DATETIME NOT NULL,
+	timestamp   TIMESTAMP NOT NULL,
 	agent       TEXT NOT NULL,
 	session_id  TEXT,
 	prompt      TEXT NOT NULL,
@@ -28,7 +29,7 @@ CREATE TABLE IF NOT EXISTS prompt_events (
 	git_remote  TEXT,
 	working_dir TEXT,
 	raw_source  TEXT,
-	created_at  DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+	created_at  TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_prompt_events_timestamp ON prompt_events(timestamp);
@@ -41,7 +42,7 @@ CREATE TABLE IF NOT EXISTS classifications (
 	category        TEXT NOT NULL,
 	confidence      REAL NOT NULL DEFAULT 1.0,
 	classifier      TEXT NOT NULL DEFAULT 'rules-v1',
-	created_at      DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+	created_at      TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_classifications_event    ON classifications(prompt_event_id);
@@ -51,8 +52,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 	id                     TEXT PRIMARY KEY,
 	project                TEXT,
 	agent                  TEXT,
-	started_at             DATETIME NOT NULL,
-	ended_at               DATETIME NOT NULL,
+	started_at             TIMESTAMP NOT NULL,
+	ended_at               TIMESTAMP NOT NULL,
 	prompt_count           INTEGER NOT NULL DEFAULT 0,
 	gap_threshold_minutes  INTEGER NOT NULL DEFAULT 30
 );
@@ -65,32 +66,20 @@ CREATE TABLE IF NOT EXISTS projects (
 	display_name TEXT,
 	git_remotes  TEXT,
 	paths        TEXT,
-	created_at   DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+	created_at   TIMESTAMP NOT NULL DEFAULT NOW()
 );
 `
 
-type Store struct {
-	db *sql.DB
-}
-
-func Open(path string) (*Store, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return nil, fmt.Errorf("create db dir: %w", err)
-	}
-	db, err := sql.Open("sqlite", path)
+func Open(dsn string) (*Store, error) {
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite: %w", err)
+		return nil, fmt.Errorf("open postgres: %w", err)
 	}
-	if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("enable foreign keys: %w", err)
-	}
-	db.SetMaxOpenConns(1)
 	return &Store{db: db}, nil
 }
 
-func (s *Store) Migrate(_ context.Context) error {
-	_, err := s.db.Exec(schema)
+func (s *Store) Migrate(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, schema)
 	if err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
@@ -101,8 +90,6 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-// -- Prompt events --
-
 func (s *Store) InsertPromptEvent(ctx context.Context, e *models.PromptEvent) error {
 	if e.ID == "" {
 		e.ID = newID()
@@ -111,39 +98,45 @@ func (s *Store) InsertPromptEvent(ctx context.Context, e *models.PromptEvent) er
 		e.CreatedAt = time.Now().UTC()
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO prompt_events
+		`INSERT INTO prompt_events
 		 (id, timestamp, agent, session_id, prompt, project, git_branch, git_remote, working_dir, raw_source, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		e.ID, e.Timestamp.UTC(), e.Agent, e.SessionID, e.Prompt,
-		e.Project, e.GitBranch, e.GitRemote, e.WorkingDir, e.RawSource, e.CreatedAt.UTC(),
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		 ON CONFLICT DO NOTHING`,
+		e.ID, e.Timestamp, e.Agent, e.SessionID, e.Prompt, e.Project, e.GitBranch, e.GitRemote, e.WorkingDir, e.RawSource, e.CreatedAt,
 	)
 	return err
 }
 
 func (s *Store) QueryPromptEvents(ctx context.Context, f store.EventFilter) ([]models.PromptEvent, error) {
-	query := `SELECT id, timestamp, agent, session_id, prompt, project, git_branch, git_remote, working_dir, raw_source, created_at
+	query := `SELECT id, timestamp, agent, session_id, prompt, project, git_branch, git_remote, working_dir, raw_source, created_at 
 	          FROM prompt_events WHERE 1=1`
 	var args []any
+	i := 1
 
 	if f.Since != nil {
-		query += " AND timestamp >= ?"
-		args = append(args, f.Since.UTC())
+		query += fmt.Sprintf(" AND timestamp >= $%d", i)
+		args = append(args, *f.Since)
+		i++
 	}
 	if f.Until != nil {
-		query += " AND timestamp <= ?"
-		args = append(args, f.Until.UTC())
+		query += fmt.Sprintf(" AND timestamp <= $%d", i)
+		args = append(args, *f.Until)
+		i++
 	}
 	if f.Agent != "" {
-		query += " AND agent = ?"
+		query += fmt.Sprintf(" AND agent = $%d", i)
 		args = append(args, f.Agent)
+		i++
 	}
 	if f.Project != "" {
-		query += " AND project = ?"
+		query += fmt.Sprintf(" AND project = $%d", i)
 		args = append(args, f.Project)
+		i++
 	}
+
 	query += " ORDER BY timestamp DESC"
 	if f.Limit > 0 {
-		query += " LIMIT ?"
+		query += fmt.Sprintf(" LIMIT $%d", i)
 		args = append(args, f.Limit)
 	}
 
@@ -156,10 +149,7 @@ func (s *Store) QueryPromptEvents(ctx context.Context, f store.EventFilter) ([]m
 	var events []models.PromptEvent
 	for rows.Next() {
 		var e models.PromptEvent
-		if err := rows.Scan(
-			&e.ID, &e.Timestamp, &e.Agent, &e.SessionID, &e.Prompt,
-			&e.Project, &e.GitBranch, &e.GitRemote, &e.WorkingDir, &e.RawSource, &e.CreatedAt,
-		); err != nil {
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Agent, &e.SessionID, &e.Prompt, &e.Project, &e.GitBranch, &e.GitRemote, &e.WorkingDir, &e.RawSource, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		events = append(events, e)
@@ -185,8 +175,6 @@ func (s *Store) ListEventIDs(ctx context.Context) ([]string, error) {
 	return ids, rows.Err()
 }
 
-// -- Classifications --
-
 func (s *Store) InsertClassification(ctx context.Context, c *models.Classification) error {
 	if c.ID == "" {
 		c.ID = newID()
@@ -196,48 +184,20 @@ func (s *Store) InsertClassification(ctx context.Context, c *models.Classificati
 	}
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO classifications (id, prompt_event_id, category, confidence, classifier, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		c.ID, c.PromptEventID, c.Category, c.Confidence, c.Classifier, c.CreatedAt.UTC(),
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 ON CONFLICT (prompt_event_id) DO UPDATE SET
+		 category = EXCLUDED.category, confidence = EXCLUDED.confidence, 
+		 classifier = EXCLUDED.classifier, created_at = EXCLUDED.created_at`,
+		c.ID, c.PromptEventID, c.Category, c.Confidence, c.Classifier, c.CreatedAt,
 	)
 	return err
-}
-
-func (s *Store) GetUnclassified(ctx context.Context, limit int) ([]models.PromptEvent, error) {
-	query := `SELECT id, timestamp, agent, session_id, prompt, project, git_branch, git_remote, working_dir, raw_source, created_at
-	          FROM prompt_events
-	          WHERE id NOT IN (SELECT DISTINCT prompt_event_id FROM classifications)
-	          ORDER BY timestamp DESC`
-	var args []any
-	if limit > 0 {
-		query += " LIMIT ?"
-		args = append(args, limit)
-	}
-
-	rows, err := s.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-
-	var events []models.PromptEvent
-	for rows.Next() {
-		var e models.PromptEvent
-		if err := rows.Scan(
-			&e.ID, &e.Timestamp, &e.Agent, &e.SessionID, &e.Prompt,
-			&e.Project, &e.GitBranch, &e.GitRemote, &e.WorkingDir, &e.RawSource, &e.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		events = append(events, e)
-	}
-	return events, rows.Err()
 }
 
 func (s *Store) QueryClassifications(ctx context.Context, eventIDs []string) ([]models.Classification, error) {
 	if len(eventIDs) == 0 {
 		return nil, nil
 	}
-	// Build WHERE IN clause in batches of 100 to avoid SQLite limits.
+
 	var all []models.Classification
 	for i := 0; i < len(eventIDs); i += 100 {
 		end := i + 100
@@ -245,14 +205,15 @@ func (s *Store) QueryClassifications(ctx context.Context, eventIDs []string) ([]
 			end = len(eventIDs)
 		}
 		batch := eventIDs[i:end]
-		placeholders := strings.Repeat("?,", len(batch))
-		placeholders = placeholders[:len(placeholders)-1]
-		query := `SELECT id, prompt_event_id, category, confidence, classifier, created_at
-		          FROM classifications WHERE prompt_event_id IN (` + placeholders + `)`
+		placeholders := make([]string, len(batch))
 		args := make([]any, len(batch))
 		for j, id := range batch {
+			placeholders[j] = fmt.Sprintf("$%d", j+1)
 			args[j] = id
 		}
+		query := fmt.Sprintf(`SELECT id, prompt_event_id, category, confidence, classifier, created_at
+		                      FROM classifications WHERE prompt_event_id IN (%s)`, strings.Join(placeholders, ","))
+
 		rows, err := s.db.QueryContext(ctx, query, args...)
 		if err != nil {
 			return nil, err
@@ -265,17 +226,42 @@ func (s *Store) QueryClassifications(ctx context.Context, eventIDs []string) ([]
 			}
 			all = append(all, c)
 		}
-		if err := rows.Close(); err != nil {
-			return nil, err
-		}
 		if err := rows.Err(); err != nil {
 			return nil, err
 		}
+		_ = rows.Close()
 	}
 	return all, nil
 }
 
-// -- Sessions --
+func (s *Store) GetUnclassified(ctx context.Context, limit int) ([]models.PromptEvent, error) {
+	query := `SELECT e.id, e.timestamp, e.agent, e.session_id, e.prompt, e.project, e.git_branch, e.git_remote, e.working_dir, e.raw_source, e.created_at
+	          FROM prompt_events e
+	          LEFT JOIN classifications c ON e.id = c.prompt_event_id
+	          WHERE c.id IS NULL
+	          ORDER BY e.timestamp DESC`
+	var args []any
+	if limit > 0 {
+		query += " LIMIT $1"
+		args = append(args, limit)
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var events []models.PromptEvent
+	for rows.Next() {
+		var e models.PromptEvent
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Agent, &e.SessionID, &e.Prompt, &e.Project, &e.GitBranch, &e.GitRemote, &e.WorkingDir, &e.RawSource, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		events = append(events, e)
+	}
+	return events, rows.Err()
+}
 
 func (s *Store) UpsertSession(ctx context.Context, sess *models.Session) error {
 	if sess.ID == "" {
@@ -283,41 +269,42 @@ func (s *Store) UpsertSession(ctx context.Context, sess *models.Session) error {
 	}
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO sessions (id, project, agent, started_at, ended_at, prompt_count, gap_threshold_minutes)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(id) DO UPDATE SET
-		   ended_at            = excluded.ended_at,
-		   prompt_count        = excluded.prompt_count,
-		   gap_threshold_minutes = excluded.gap_threshold_minutes`,
-		sess.ID, sess.Project, sess.Agent,
-		sess.StartedAt.UTC(), sess.EndedAt.UTC(),
-		sess.PromptCount, sess.GapThresholdMinutes,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 ON CONFLICT (id) DO UPDATE SET
+		 project = EXCLUDED.project, agent = EXCLUDED.agent, 
+		 started_at = EXCLUDED.started_at, ended_at = EXCLUDED.ended_at, 
+		 prompt_count = EXCLUDED.prompt_count, gap_threshold_minutes = EXCLUDED.gap_threshold_minutes`,
+		sess.ID, sess.Project, sess.Agent, sess.StartedAt, sess.EndedAt, sess.PromptCount, sess.GapThresholdMinutes,
 	)
 	return err
 }
 
 func (s *Store) QuerySessions(ctx context.Context, f store.SessionFilter) ([]models.Session, error) {
-	query := `SELECT id, project, agent, started_at, ended_at, prompt_count, gap_threshold_minutes
-	          FROM sessions WHERE 1=1`
+	query := `SELECT id, project, agent, started_at, ended_at, prompt_count, gap_threshold_minutes FROM sessions WHERE 1=1`
 	var args []any
+	i := 1
 
 	if f.Since != nil {
-		query += " AND started_at >= ?"
-		args = append(args, f.Since.UTC())
+		query += fmt.Sprintf(" AND started_at >= $%d", i)
+		args = append(args, *f.Since)
+		i++
 	}
 	if f.Until != nil {
-		query += " AND ended_at <= ?"
-		args = append(args, f.Until.UTC())
+		query += fmt.Sprintf(" AND ended_at <= $%d", i)
+		args = append(args, *f.Until)
+		i++
 	}
 	if f.Project != "" {
-		query += " AND project = ?"
+		query += fmt.Sprintf(" AND project = $%d", i)
 		args = append(args, f.Project)
+		i++
 	}
 	if f.Agent != "" {
-		query += " AND agent = ?"
+		query += fmt.Sprintf(" AND agent = $%d", i)
 		args = append(args, f.Agent)
 	}
-	query += " ORDER BY started_at DESC"
 
+	query += " ORDER BY started_at DESC"
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -327,11 +314,7 @@ func (s *Store) QuerySessions(ctx context.Context, f store.SessionFilter) ([]mod
 	var sessions []models.Session
 	for rows.Next() {
 		var sess models.Session
-		if err := rows.Scan(
-			&sess.ID, &sess.Project, &sess.Agent,
-			&sess.StartedAt, &sess.EndedAt,
-			&sess.PromptCount, &sess.GapThresholdMinutes,
-		); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.Project, &sess.Agent, &sess.StartedAt, &sess.EndedAt, &sess.PromptCount, &sess.GapThresholdMinutes); err != nil {
 			return nil, err
 		}
 		sessions = append(sessions, sess)
@@ -339,30 +322,21 @@ func (s *Store) QuerySessions(ctx context.Context, f store.SessionFilter) ([]mod
 	return sessions, rows.Err()
 }
 
-// -- Projects --
-
 func (s *Store) UpsertProject(ctx context.Context, p *models.Project) error {
-	if p.CreatedAt.IsZero() {
-		p.CreatedAt = time.Now().UTC()
-	}
+	gitRemotes := strings.Join(p.GitRemotes, "\n")
+	paths := strings.Join(p.Paths, "\n")
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO projects (name, display_name, git_remotes, paths, created_at)
-		 VALUES (?, ?, ?, ?, ?)
-		 ON CONFLICT(name) DO UPDATE SET
-		   display_name = excluded.display_name,
-		   git_remotes  = excluded.git_remotes,
-		   paths        = excluded.paths`,
-		p.Name, p.DisplayName,
-		joinStrings(p.GitRemotes), joinStrings(p.Paths),
-		p.CreatedAt.UTC(),
+		`INSERT INTO projects (name, display_name, git_remotes, paths)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (name) DO UPDATE SET
+		 display_name = EXCLUDED.display_name, git_remotes = EXCLUDED.git_remotes, paths = EXCLUDED.paths`,
+		p.Name, p.DisplayName, gitRemotes, paths,
 	)
 	return err
 }
 
 func (s *Store) ListProjects(ctx context.Context) ([]models.Project, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT name, display_name, git_remotes, paths, created_at FROM projects ORDER BY name`,
-	)
+	rows, err := s.db.QueryContext(ctx, "SELECT name, display_name, git_remotes, paths, created_at FROM projects ORDER BY name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -382,42 +356,17 @@ func (s *Store) ListProjects(ctx context.Context) ([]models.Project, error) {
 	return projects, rows.Err()
 }
 
-// -- helpers --
-
 func newID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		// Fallback to random string if crypto/rand fails (should be rare)
 		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
 	}
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
-// joinStrings serialises a string slice as a newline-delimited string for storage.
-func joinStrings(ss []string) string {
-	var b strings.Builder
-	for i, s := range ss {
-		if i > 0 {
-			b.WriteByte('\n')
-		}
-		b.WriteString(s)
-	}
-	return b.String()
-}
-
-// splitStrings deserialises a newline-delimited string back into a slice.
 func splitStrings(s string) []string {
 	if s == "" {
 		return nil
 	}
-	var out []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			out = append(out, s[start:i])
-			start = i + 1
-		}
-	}
-	out = append(out, s[start:])
-	return out
+	return strings.Split(s, "\n")
 }

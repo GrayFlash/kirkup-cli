@@ -5,10 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/GrayFlash/kirkup-cli/agent"
-	agentclaude "github.com/GrayFlash/kirkup-cli/agent/claude"
-	agentcursor "github.com/GrayFlash/kirkup-cli/agent/cursor"
-	agentgemini "github.com/GrayFlash/kirkup-cli/agent/gemini"
 )
 
 var agentsCmd = &cobra.Command{
@@ -22,20 +18,17 @@ func init() {
 }
 
 func runAgents(_ *cobra.Command, _ []string) error {
-	registry := agent.NewRegistry(
-		agentgemini.New(),
-		agentcursor.New(),
-		agentclaude.New(),
-	)
+	cfg, _ := loadConfig()
+	registry := newAgentRegistry(cfg)
 
 	for _, a := range registry.All() {
 		status := "not detected"
 		if a.Detect() {
-			status = "detected"
+			status = "detected ✓"
 		}
-		fmt.Printf("%-14s  %s\n", a.Name(), status)
+		fmt.Printf("  %-14s %s\n", a.Name(), status)
 		for _, g := range a.WatchGlobs() {
-			fmt.Printf("               %s\n", g)
+			fmt.Printf("                 %s\n", g)
 		}
 	}
 	return nil

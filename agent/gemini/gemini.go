@@ -18,58 +18,70 @@ func New() *Adapter { return &Adapter{} }
 func (a *Adapter) Name() string { return "gemini-cli" }
 
 func (a *Adapter) Detect() bool {
-	home, _ := os.UserHomeDir()
-	_, err := os.Stat(filepath.Join(home, ".gemini"))
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(filepath.Join(home, ".gemini"))
 	return err == nil
 }
 
 func (a *Adapter) WatchGlobs() []string {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
 	return []string{filepath.Join(home, ".gemini", "tmp", "*", "logs.json")}
 }
 
-type logEntry struct {
-	SessionID string `json:"sessionId"`
-	Type      string `json:"type"`
-	Message   string `json:"message"`
-	Timestamp string `json:"timestamp"`
-}
-
-func (a *Adapter) Events(_ context.Context, path string) ([]models.PromptEvent, error) {
+func (a *Adapter) Events(ctx context.Context, path string) ([]models.PromptEvent, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	var entries []logEntry
-	if err := json.Unmarshal(data, &entries); err != nil {
+	var log struct {
+		Entries []logEntry `json:"entries"`
+	}
+	if err := json.Unmarshal(data, &log); err != nil {
 		return nil, err
 	}
 
 	cwd := readProjectRoot(path)
 
 	var events []models.PromptEvent
-	for _, e := range entries {
-		if e.Type != "user" || e.Message == "" {
-			continue
+	for _, e := range log.Entries {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
 		}
-		ts, err := time.Parse(time.RFC3339, e.Timestamp)
-		if err != nil {
+		if e.Role != "user" {
 			continue
 		}
 		events = append(events, models.PromptEvent{
-			Timestamp:  ts,
-			Agent:      a.Name(),
-			SessionID:  e.SessionID,
-			Prompt:     e.Message,
+			Agent:      "gemini-cli",
+			Timestamp:  e.timestamp(),
+			Prompt:     e.Content,
 			WorkingDir: cwd,
+			RawSource:  e.SessionID,
 		})
 	}
 	return events, nil
 }
 
-// readProjectRoot reads the cwd from the .project_root file
-// that Gemini CLI writes alongside logs.json.
+type logEntry struct {
+	SessionID string `json:"sessionId"`
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	Time      string `json:"time"` // RFC3339
+}
+
+func (e logEntry) timestamp() time.Time {
+	t, _ := time.Parse(time.RFC3339, e.Time)
+	return t
+}
+
 func readProjectRoot(logsPath string) string {
 	data, err := os.ReadFile(filepath.Join(filepath.Dir(logsPath), ".project_root"))
 	if err != nil {

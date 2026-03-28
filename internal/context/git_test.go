@@ -1,6 +1,8 @@
-package collector
+package context
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestNormaliseRemote(t *testing.T) {
 	cases := []struct {
@@ -19,25 +21,6 @@ func TestNormaliseRemote(t *testing.T) {
 		got := normaliseRemote(c.input)
 		if got != c.want {
 			t.Errorf("normaliseRemote(%q) = %q, want %q", c.input, got, c.want)
-		}
-	}
-}
-
-func TestGlobWatchDir(t *testing.T) {
-	cases := []struct {
-		pattern string
-		want    string
-	}{
-		{"/home/user/.gemini/tmp/*/logs.json", "/home/user/.gemini/tmp"},
-		{"/home/user/.config/Cursor/User/workspaceStorage/*/state.vscdb", "/home/user/.config/Cursor/User/workspaceStorage"},
-		{"/no/wildcards/file.json", "/no/wildcards"},
-		{"/path/to/?.json", "/path/to"},
-	}
-
-	for _, c := range cases {
-		got := globWatchDir(c.pattern)
-		if got != c.want {
-			t.Errorf("globWatchDir(%q) = %q, want %q", c.pattern, got, c.want)
 		}
 	}
 }

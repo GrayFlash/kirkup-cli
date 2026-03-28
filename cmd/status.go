@@ -3,14 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/GrayFlash/kirkup-cli/agent"
-	agentclaude "github.com/GrayFlash/kirkup-cli/agent/claude"
-	agentcursor "github.com/GrayFlash/kirkup-cli/agent/cursor"
-	agentgemini "github.com/GrayFlash/kirkup-cli/agent/gemini"
 	"github.com/GrayFlash/kirkup-cli/store"
 )
 
@@ -33,45 +28,30 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		fmt.Println("daemon:  stopped")
 	}
 
+	// Events today
+	cfg, s, cleanup, err := openApp()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
 	// Agent detection
-	registry := agent.NewRegistry(
-		agentgemini.New(),
-		agentcursor.New(),
-		agentclaude.New(),
-	)
+	registry := newAgentRegistry(cfg)
 	fmt.Println()
 	fmt.Println("agents:")
 	for _, a := range registry.All() {
 		status := "not detected"
 		if a.Detect() {
-			status = "detected"
+			status = "detected ✓"
 		}
 		fmt.Printf("  %-14s %s\n", a.Name(), status)
 	}
 
-	// Events today (best-effort — skip if config or store unavailable)
-	cfg, err := loadConfig()
-	if err != nil {
-		return nil
-	}
-	s, err := openStore(cfg)
-	if err != nil {
-		return nil
-	}
-	defer func() { _ = s.Close() }()
-
 	midnight := today()
 	events, err := s.QueryPromptEvents(context.Background(), store.EventFilter{Since: &midnight})
 	if err != nil {
-		return nil
+		return err
 	}
 	fmt.Printf("\nevents today: %d\n", len(events))
 	return nil
-}
-
-// today returns midnight of the current local day in UTC.
-func today() time.Time {
-	now := time.Now()
-	y, m, d := now.Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, now.Location())
 }

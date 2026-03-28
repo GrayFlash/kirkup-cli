@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/GrayFlash/kirkup-cli/retro"
+	"github.com/GrayFlash/kirkup-cli/internal/retro"
 )
 
 var (
@@ -35,15 +35,11 @@ func init() {
 }
 
 func runRetro(_ *cobra.Command, _ []string) error {
-	cfg, err := loadConfig()
+	cfg, s, cleanup, err := openApp()
 	if err != nil {
 		return err
 	}
-	s, err := openStore(cfg)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = s.Close() }()
+	defer cleanup()
 
 	from, to, err := resolveRange()
 	if err != nil {
@@ -66,7 +62,7 @@ func runRetro(_ *cobra.Command, _ []string) error {
 // Priority: --from/--to > --month > --week (default).
 func resolveRange() (time.Time, time.Time, error) {
 	if retroFrom != "" || retroTo != "" {
-		return parseCustomRange(retroFrom, retroTo)
+		return parseDateRange(retroFrom, retroTo)
 	}
 	if retroMonth {
 		return currentMonth()
@@ -93,32 +89,6 @@ func currentMonth() (time.Time, time.Time, error) {
 	return from, to, nil
 }
 
-func parseCustomRange(fromStr, toStr string) (time.Time, time.Time, error) {
-	const layout = "2006-01-02"
-	var from, to time.Time
-	var err error
-
-	if fromStr != "" {
-		from, err = time.ParseInLocation(layout, fromStr, time.Local)
-		if err != nil {
-			return time.Time{}, time.Time{}, fmt.Errorf("invalid --from date %q: use YYYY-MM-DD", fromStr)
-		}
-	} else {
-		from = truncateDay(time.Now().AddDate(0, 0, -7))
-	}
-
-	if toStr != "" {
-		to, err = time.ParseInLocation(layout, toStr, time.Local)
-		if err != nil {
-			return time.Time{}, time.Time{}, fmt.Errorf("invalid --to date %q: use YYYY-MM-DD", toStr)
-		}
-		to = to.Add(24*time.Hour - time.Second)
-	} else {
-		to = truncateDay(time.Now()).Add(24*time.Hour - time.Second)
-	}
-
-	return from, to, nil
-}
 
 func truncateDay(t time.Time) time.Time {
 	y, m, d := t.Date()

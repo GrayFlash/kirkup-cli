@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 
@@ -15,20 +16,27 @@ import (
 
 	"github.com/GrayFlash/kirkup-cli/agent"
 	"github.com/GrayFlash/kirkup-cli/config"
+	kctx "github.com/GrayFlash/kirkup-cli/internal/context"
 	"github.com/GrayFlash/kirkup-cli/models"
 	"github.com/GrayFlash/kirkup-cli/store"
 )
 
 // Collector watches agent log files and writes new prompt events to the store.
 type Collector struct {
-	agents  *agent.Registry
-	store   store.Store
-	cfg     *config.Config
-	log     *slog.Logger
-	seen    map[string]struct{}
-	mu      sync.Mutex
-	cancel  context.CancelFunc
-	done    chan struct{}
+	agents       *agent.Registry
+	store        store.Store
+	cfg          *config.Config
+	log          *slog.Logger
+	seen         map[string]struct{}
+	seenProjects map[string]struct{}
+	mu           sync.Mutex
+	cancel       context.CancelFunc
+	done         chan struct{}
+
+	statsProcessed int
+	statsNew       int
+
+	redactionPatterns []*regexp.Regexp
 }
 
 // New creates a Collector. Call Start to begin watching.
@@ -36,14 +44,35 @@ func New(agents *agent.Registry, s store.Store, cfg *config.Config, log *slog.Lo
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Collector{
-		agents: agents,
-		store:  s,
-		cfg:    cfg,
-		log:    log,
-		seen:   make(map[string]struct{}),
-		done:   make(chan struct{}),
+	c := &Collector{
+		agents:       agents,
+		store:        s,
+		cfg:          cfg,
+		log:          log,
+		seen:         make(map[string]struct{}),
+		seenProjects: make(map[string]struct{}),
+		done:         make(chan struct{}),
 	}
+
+	if cfg.Privacy.Redact {
+		patterns := cfg.Privacy.Patterns
+		if len(patterns) == 0 {
+			patterns = []string{
+				`sk-[a-zA-Z0-9]{48}`,                // OpenAI
+				`ghp_[a-zA-Z0-9]{36}`,               // GitHub
+				`xoxb-[0-9]{11,13}-[a-zA-Z0-9]{24}`, // Slack
+			}
+		}
+		for _, p := range patterns {
+			if re, err := regexp.Compile(p); err == nil {
+				c.redactionPatterns = append(c.redactionPatterns, re)
+			} else {
+				c.log.Warn("invalid privacy redaction pattern", "pattern", p, "err", err)
+			}
+		}
+	}
+
+	return c
 }
 
 // Start performs an initial scan of all agent files, then watches for changes.
@@ -70,6 +99,8 @@ func (c *Collector) Start(ctx context.Context) error {
 			c.log.Warn("cannot watch dir", "dir", dir, "err", err)
 		}
 	}
+
+	c.syncConfigProjects(ctx)
 
 	// Initial scan.
 	c.scanAll(ctx, globs)
@@ -114,6 +145,37 @@ func (c *Collector) Stop() {
 	<-c.done
 }
 
+// LoadSeen populates the in-memory deduplication map from the store.
+func (c *Collector) LoadSeen(ctx context.Context) error {
+	ids, err := c.store.ListEventIDs(ctx)
+	if err != nil {
+		return fmt.Errorf("list event ids: %w", err)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, id := range ids {
+		c.seen[id] = struct{}{}
+	}
+	return nil
+}
+
+// Scan performs a one-shot scan of all agent log files and returns the number
+// of events processed and the number of new events stored.
+func (c *Collector) Scan(ctx context.Context) (processed, new int) {
+	c.mu.Lock()
+	c.statsProcessed = 0
+	c.statsNew = 0
+	c.mu.Unlock()
+
+	c.syncConfigProjects(ctx)
+	globs := c.collectGlobs()
+	c.scanAll(ctx, globs)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.statsProcessed, c.statsNew
+}
+
 // scanAll expands all globs and processes each matching file.
 func (c *Collector) scanAll(ctx context.Context, globs []globEntry) {
 	for _, g := range globs {
@@ -155,6 +217,10 @@ func (c *Collector) processFile(ctx context.Context, a agent.Adapter, path strin
 	for i := range events {
 		e := &events[i]
 
+		c.mu.Lock()
+		c.statsProcessed++
+		c.mu.Unlock()
+
 		// Deterministic ID for deduplication.
 		e.ID = eventID(e)
 
@@ -169,9 +235,12 @@ func (c *Collector) processFile(ctx context.Context, a agent.Adapter, path strin
 			continue
 		}
 
+		// Redact secrets
+		e.Prompt = c.redact(e.Prompt)
+
 		// Enrich with git context if we have a working directory.
 		if e.WorkingDir != "" && (e.GitRemote == "" || e.GitBranch == "") {
-			gi := GitContext(e.WorkingDir)
+			gi := kctx.GitContext(e.WorkingDir)
 			if e.GitRemote == "" {
 				e.GitRemote = gi.Remote
 			}
@@ -182,17 +251,26 @@ func (c *Collector) processFile(ctx context.Context, a agent.Adapter, path strin
 
 		// Resolve project name.
 		if e.Project == "" {
-			e.Project = ResolveProject(c.cfg.Projects, e.GitRemote, e.WorkingDir)
+			e.Project = kctx.ResolveProject(c.cfg.Projects, e.GitRemote, e.WorkingDir)
 		}
 
 		if err := c.store.InsertPromptEvent(ctx, e); err != nil {
 			c.log.Error("store insert", "err", err)
+			c.mu.Lock()
+			delete(c.seen, e.ID)
+			c.mu.Unlock()
 		} else {
+			c.mu.Lock()
+			c.statsNew++
+			c.mu.Unlock()
 			c.log.Debug("stored event",
 				"agent", e.Agent,
 				"project", e.Project,
 				"prompt_prefix", truncate(e.Prompt, 60),
 			)
+			if e.Project != "" {
+				c.ensureProject(ctx, e)
+			}
 		}
 	}
 }
@@ -211,6 +289,55 @@ func (c *Collector) collectGlobs() []globEntry {
 		}
 	}
 	return entries
+}
+
+// syncConfigProjects upserts projects defined in the config file so that
+// ListProjects returns them even before any events are collected.
+func (c *Collector) syncConfigProjects(ctx context.Context) {
+	for _, p := range c.cfg.Projects {
+		proj := &models.Project{
+			Name:        p.Name,
+			DisplayName: p.DisplayName,
+			Paths:       p.Match.Paths,
+		}
+		if p.Match.GitRemote != "" {
+			proj.GitRemotes = []string{p.Match.GitRemote}
+		}
+		if err := c.store.UpsertProject(ctx, proj); err != nil {
+			c.log.Warn("upsert config project", "name", p.Name, "err", err)
+		} else {
+			c.mu.Lock()
+			c.seenProjects[p.Name] = struct{}{}
+			c.mu.Unlock()
+		}
+	}
+}
+
+// ensureProject persists a project record the first time the collector
+// encounters a new project name from an event.
+func (c *Collector) ensureProject(ctx context.Context, e *models.PromptEvent) {
+	c.mu.Lock()
+	_, known := c.seenProjects[e.Project]
+	c.mu.Unlock()
+
+	if known {
+		return
+	}
+
+	proj := &models.Project{Name: e.Project}
+	if e.GitRemote != "" {
+		proj.GitRemotes = []string{e.GitRemote}
+	}
+	if e.WorkingDir != "" {
+		proj.Paths = []string{e.WorkingDir}
+	}
+	if err := c.store.UpsertProject(ctx, proj); err != nil {
+		c.log.Warn("upsert discovered project", "name", e.Project, "err", err)
+	} else {
+		c.mu.Lock()
+		c.seenProjects[e.Project] = struct{}{}
+		c.mu.Unlock()
+	}
 }
 
 type globEntry struct {
@@ -258,17 +385,14 @@ func truncate(s string, n int) string {
 	return s[:n] + "…"
 }
 
-func uniqueStrings(ss []string) []string {
-	seen := make(map[string]struct{}, len(ss))
-	out := make([]string, 0, len(ss))
-	for _, s := range ss {
-		if _, ok := seen[s]; !ok {
-			seen[s] = struct{}{}
-			out = append(out, s)
-		}
+
+func (c *Collector) redact(prompt string) string {
+	if len(c.redactionPatterns) == 0 {
+		return prompt
+	}
+	out := prompt
+	for _, re := range c.redactionPatterns {
+		out = re.ReplaceAllString(out, "[REDACTED]")
 	}
 	return out
 }
-
-// suppress unused warning — uniqueStrings is available for callers
-var _ = uniqueStrings

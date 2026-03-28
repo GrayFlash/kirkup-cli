@@ -46,7 +46,7 @@ kirkup-cli/
 ├── retro/                         # Aggregation, summary logic, terminal rendering
 ├── config/                        # YAML config parsing
 ├── models/                        # Shared domain types (stdlib only, no deps)
-├── configs/default.yaml           # Default config template
+├── config/defaults/default.yaml           # Default config template
 ├── go.mod
 └── .goreleaser.yaml
 ```

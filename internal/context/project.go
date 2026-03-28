@@ -1,7 +1,6 @@
-package collector
+package context
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -18,8 +17,9 @@ import (
 func ResolveProject(projects []config.ProjectConfig, gitRemote, workingDir string) string {
 	// 1. Match by git remote
 	if gitRemote != "" {
+		normalisedIn := normaliseRemote(gitRemote)
 		for _, p := range projects {
-			if normaliseRemote(p.Match.GitRemote) == gitRemote {
+			if normaliseRemote(p.Match.GitRemote) == normalisedIn {
 				return p.Name
 			}
 		}
@@ -29,7 +29,7 @@ func ResolveProject(projects []config.ProjectConfig, gitRemote, workingDir strin
 	if workingDir != "" {
 		for _, p := range projects {
 			for _, path := range p.Match.Paths {
-				expanded := expandHome(path)
+				expanded := config.ExpandHome(path)
 				if strings.HasPrefix(workingDir, expanded) {
 					return p.Name
 				}
@@ -44,10 +44,3 @@ func ResolveProject(projects []config.ProjectConfig, gitRemote, workingDir strin
 	return ""
 }
 
-func expandHome(path string) string {
-	if !strings.HasPrefix(path, "~/") {
-		return path
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, path[2:])
-}
