@@ -39,15 +39,16 @@ func runDashboard(_ *cobra.Command, _ []string) error {
 	composePath := filepath.Join(dashDir, "docker-compose.yaml")
 	var composeContent string
 
-	if cfg.Store.Driver == "sqlite" {
+	switch cfg.Store.Driver {
+	case "sqlite":
 		sqlitePath := cfg.Store.SQLite.Path
 		if !filepath.IsAbs(sqlitePath) {
 			sqlitePath = filepath.Join(dir, sqlitePath)
 		}
 		composeContent = fmt.Sprintf(dashboardComposeSQLite, sqlitePath)
-	} else if cfg.Store.Driver == "postgres" {
+	case "postgres":
 		composeContent = fmt.Sprintf(dashboardComposePostgres, cfg.Store.PG.DSN)
-	} else {
+	default:
 		return fmt.Errorf("unsupported store driver for dashboard: %q", cfg.Store.Driver)
 	}
 
