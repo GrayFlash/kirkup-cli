@@ -24,7 +24,7 @@ var classifyCmd = &cobra.Command{
 
 func init() {
 	classifyCmd.Flags().BoolVar(&classifyReclassify, "reclassify", false, "Re-classify all events, not just unclassified ones")
-	classifyCmd.Flags().StringVar(&classifyMode, "mode", "rules", "Classifier to use: rules")
+	classifyCmd.Flags().StringVar(&classifyMode, "mode", "", "Classifier to use: rules or llm (overrides config)")
 	classifyCmd.Flags().BoolVar(&classifyReconfigure, "reconfigure", false, "Open the classifier config in $EDITOR")
 	rootCmd.AddCommand(classifyCmd)
 }
@@ -48,17 +48,22 @@ func runClassify(_ *cobra.Command, _ []string) error {
 	if classifyMode != "" {
 		mode = classifyMode
 	}
+	if mode == "" {
+		mode = "rules"
+	}
 
 	var cl classifier.Classifier
 	switch mode {
 	case "llm":
 		cl = classifier.NewLLMClassifier(cfg.Classifier.LLM)
-	case "rules", "":
+	case "rules":
 		rc := classifier.NewRuleClassifier()
 		for _, r := range cfg.Classifier.CustomRules {
 			rc.AddRule(r.Category, r.Keywords, r.Patterns, r.Priority)
 		}
 		cl = rc
+	case "both":
+		return fmt.Errorf("unsupported mode %q: only rules or llm are available currently", mode)
 	default:
 		return fmt.Errorf("unsupported mode %q", mode)
 	}

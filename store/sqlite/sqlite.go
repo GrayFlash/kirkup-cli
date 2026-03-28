@@ -37,7 +37,7 @@ CREATE INDEX IF NOT EXISTS idx_prompt_events_project   ON prompt_events(project)
 
 CREATE TABLE IF NOT EXISTS classifications (
 	id              TEXT PRIMARY KEY,
-	prompt_event_id TEXT NOT NULL REFERENCES prompt_events(id),
+	prompt_event_id TEXT NOT NULL UNIQUE REFERENCES prompt_events(id),
 	category        TEXT NOT NULL,
 	confidence      REAL NOT NULL DEFAULT 1.0,
 	classifier      TEXT NOT NULL DEFAULT 'rules-v1',

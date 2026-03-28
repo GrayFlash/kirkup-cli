@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -31,13 +32,32 @@ func init() {
 }
 
 func runLog(_ *cobra.Command, args []string) error {
-	_, s, cleanup, err := openApp()
+	cfg, s, cleanup, err := openApp()
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
 	description := args[0]
+
+	// Use collector's redact directly or copy the simple loop.
+	if cfg.Privacy.Redact {
+		for _, pattern := range cfg.Privacy.Patterns {
+			if re, err := regexp.Compile(pattern); err == nil {
+				description = re.ReplaceAllString(description, "[REDACTED]")
+			}
+		}
+		// Apply defaults if none configured
+		if len(cfg.Privacy.Patterns) == 0 {
+			defaults := []string{`sk-[a-zA-Z0-9]{48}`, `ghp_[a-zA-Z0-9]{36}`, `xoxb-[0-9]{11,13}-[a-zA-Z0-9]{24}`}
+			for _, pattern := range defaults {
+				if re, err := regexp.Compile(pattern); err == nil {
+					description = re.ReplaceAllString(description, "[REDACTED]")
+				}
+			}
+		}
+	}
+
 	ts := time.Now().UTC()
 
 	if logTime != "" {

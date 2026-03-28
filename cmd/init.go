@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-
-	"github.com/GrayFlash/kirkup-cli/store/sqlite"
 )
 
 // DefaultConfig is set by main.go via go:embed so the binary always carries
@@ -42,23 +40,23 @@ func runInit(_ *cobra.Command, _ []string) error {
 	}
 
 	// -- Database --
-	dbPath, err := defaultDBPath()
+	cfg, s, cleanup, err := openApp()
 	if err != nil {
 		return err
 	}
-	s, err := sqlite.Open(dbPath)
-	if err != nil {
-		return fmt.Errorf("open database: %w", err)
-	}
-	defer func() { _ = s.Close() }()
+	defer cleanup()
 
 	if err := s.Migrate(context.Background()); err != nil {
 		return fmt.Errorf("migrate database: %w", err)
 	}
-	fmt.Printf("initialised database:  %s\n", dbPath)
+	
+	if cfg.Store.Driver == "postgres" {
+		fmt.Println("initialised postgres database")
+	} else {
+		fmt.Printf("initialised database:  %s\n", cfg.Store.SQLite.Path)
+	}
 
 	// -- Agent detection --
-	cfg, _ := loadConfig()
 	registry := newAgentRegistry(cfg)
 
 	fmt.Println()
