@@ -88,7 +88,7 @@ func TestCollector_Scan(t *testing.T) {
 	}
 	
 	// Run again, should be 0 new due to memory 'seen' map
-	processed, newCount = c.Scan(context.Background())
+	_, newCount = c.Scan(context.Background())
 	if newCount != 0 {
 		t.Errorf("expected 0 new on second run, got %d", newCount)
 	}

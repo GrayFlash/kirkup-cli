@@ -62,6 +62,10 @@ func (c *LLMClassifier) classifyBatch(ctx context.Context, batch []models.Prompt
 	switch c.cfg.Provider {
 	case "ollama":
 		response, err = c.callOllama(ctx, prompt)
+	case "openai":
+		response, err = c.callOpenAI(ctx, prompt)
+	case "anthropic":
+		response, err = c.callAnthropic(ctx, prompt)
 	default:
 		return nil, fmt.Errorf("unsupported LLM provider: %q", c.cfg.Provider)
 	}
@@ -71,6 +75,109 @@ func (c *LLMClassifier) classifyBatch(ctx context.Context, batch []models.Prompt
 	}
 
 	return c.parseResponse(batch, response)
+}
+
+func (c *LLMClassifier) callOpenAI(ctx context.Context, prompt string) (string, error) {
+	url := "https://api.openai.com/v1/chat/completions"
+	if c.cfg.Endpoint != "" {
+		url = c.cfg.Endpoint
+	}
+
+	body := map[string]any{
+		"model": c.cfg.Model,
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
+		"response_format": map[string]string{"type": "json_object"},
+	}
+
+	jsonBody, _ := json.Marshal(body)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("openai error (status %d): %s", resp.StatusCode, string(data))
+	}
+
+	var res struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", err
+	}
+
+	if len(res.Choices) == 0 {
+		return "", fmt.Errorf("openai returned no choices")
+	}
+
+	return res.Choices[0].Message.Content, nil
+}
+
+func (c *LLMClassifier) callAnthropic(ctx context.Context, prompt string) (string, error) {
+	url := "https://api.anthropic.com/v1/messages"
+	if c.cfg.Endpoint != "" {
+		url = c.cfg.Endpoint
+	}
+
+	body := map[string]any{
+		"model":      c.cfg.Model,
+		"max_tokens": 1024,
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
+	}
+
+	jsonBody, _ := json.Marshal(body)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", c.cfg.APIKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("anthropic error (status %d): %s", resp.StatusCode, string(data))
+	}
+
+	var res struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", err
+	}
+
+	if len(res.Content) == 0 {
+		return "", fmt.Errorf("anthropic returned no content")
+	}
+
+	return res.Content[0].Text, nil
 }
 
 func (c *LLMClassifier) buildPrompt(batch []models.PromptEvent) string {
@@ -88,7 +195,7 @@ func (c *LLMClassifier) buildPrompt(batch []models.PromptEvent) string {
 	sb.WriteString("Respond ONLY with a JSON array of objects, each having 'category' and 'confidence' fields.\n\n")
 
 	for i, e := range batch {
-		sb.WriteString(fmt.Sprintf("Prompt %d: %s\n", i+1, e.Prompt))
+		fmt.Fprintf(&sb, "Prompt %d: %s\n", i+1, e.Prompt)
 	}
 
 	sb.WriteString("\nOutput Format: [{\"category\": \"...\", \"confidence\": 0.9}, ...]")
@@ -115,7 +222,7 @@ func (c *LLMClassifier) callOllama(ctx context.Context, prompt string) (string, 
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	
 	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)

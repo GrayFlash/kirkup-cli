@@ -26,9 +26,9 @@ func runAgents(_ *cobra.Command, _ []string) error {
 		if a.Detect() {
 			status = "detected ✓"
 		}
-		fmt.Printf("%-14s  %s\n", a.Name(), status)
+		fmt.Printf("  %-14s %s\n", a.Name(), status)
 		for _, g := range a.WatchGlobs() {
-			fmt.Printf("               %s\n", g)
+			fmt.Printf("                 %s\n", g)
 		}
 	}
 	return nil

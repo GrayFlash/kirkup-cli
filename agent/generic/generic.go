@@ -113,6 +113,7 @@ func (a *Adapter) mapEvent(m map[string]any) (models.PromptEvent, bool) {
 
 	if a.cfg.SessionIDField != "" {
 		if sid, ok := m[a.cfg.SessionIDField]; ok {
+			e.SessionID = fmt.Sprint(sid)
 			e.RawSource = fmt.Sprint(sid)
 		}
 	}

@@ -8,12 +8,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/GrayFlash/kirkup-cli/classifier"
 	"github.com/GrayFlash/kirkup-cli/models"
 )
 
 var (
-	logProject string
-	logTime    string
+	logProject  string
+	logTime     string
+	logCategory string
 )
 
 var logCmd = &cobra.Command{
@@ -28,6 +30,7 @@ such as spec reading, planning, or meetings.`,
 func init() {
 	logCmd.Flags().StringVarP(&logProject, "project", "p", "", "Project name")
 	logCmd.Flags().StringVarP(&logTime, "time", "t", "", "Time of activity (YYYY-MM-DD HH:MM:SS), defaults to now")
+	logCmd.Flags().StringVarP(&logCategory, "category", "c", "", "Category for this activity (e.g. coding, review, etc)")
 	rootCmd.AddCommand(logCmd)
 }
 
@@ -40,20 +43,15 @@ func runLog(_ *cobra.Command, args []string) error {
 
 	description := args[0]
 
-	// Use collector's redact directly or copy the simple loop.
+	// Use regex redaction
 	if cfg.Privacy.Redact {
-		for _, pattern := range cfg.Privacy.Patterns {
-			if re, err := regexp.Compile(pattern); err == nil {
-				description = re.ReplaceAllString(description, "[REDACTED]")
-			}
+		patterns := cfg.Privacy.Patterns
+		if len(patterns) == 0 {
+			patterns = []string{`sk-[a-zA-Z0-9]{48}`, `ghp_[a-zA-Z0-9]{36}`, `xoxb-[0-9]{11,13}-[a-zA-Z0-9]{24}`}
 		}
-		// Apply defaults if none configured
-		if len(cfg.Privacy.Patterns) == 0 {
-			defaults := []string{`sk-[a-zA-Z0-9]{48}`, `ghp_[a-zA-Z0-9]{36}`, `xoxb-[0-9]{11,13}-[a-zA-Z0-9]{24}`}
-			for _, pattern := range defaults {
-				if re, err := regexp.Compile(pattern); err == nil {
-					description = re.ReplaceAllString(description, "[REDACTED]")
-				}
+		for _, p := range patterns {
+			if re, err := regexp.Compile(p); err == nil {
+				description = re.ReplaceAllString(description, "[REDACTED]")
 			}
 		}
 	}
@@ -79,8 +77,29 @@ func runLog(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("insert event: %w", err)
 	}
 
-	fmt.Printf("Logged activity: %s\n", description)
-	fmt.Println("Run 'kirkup classify' to categorize this new activity.")
+	// Automatic classification if category provided or via rules
+	if logCategory != "" {
+		c := &models.Classification{
+			PromptEventID: e.ID,
+			Category:      logCategory,
+			Confidence:    1.0,
+			Classifier:    "manual",
+			CreatedAt:     time.Now().UTC(),
+		}
+		_ = s.InsertClassification(context.Background(), c)
+	} else {
+		// Run rule-based classification immediately for this single event
+		rc := classifier.NewRuleClassifier()
+		for _, r := range cfg.Classifier.CustomRules {
+			rc.AddRule(r.Category, r.Keywords, r.Patterns, r.Priority)
+		}
+		cs, err := rc.Classify(context.Background(), []models.PromptEvent{*e})
+		if err == nil && len(cs) > 0 {
+			_ = s.InsertClassification(context.Background(), &cs[0])
+			fmt.Printf("Auto-categorised as: %s\n", cs[0].Category)
+		}
+	}
 
+	fmt.Printf("Logged activity: %s\n", description)
 	return nil
 }

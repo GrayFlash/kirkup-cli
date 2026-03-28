@@ -144,7 +144,7 @@ func (s *Store) QueryPromptEvents(ctx context.Context, f store.EventFilter) ([]m
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var events []models.PromptEvent
 	for rows.Next() {
@@ -162,7 +162,7 @@ func (s *Store) ListEventIDs(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var ids []string
 	for rows.Next() {
@@ -218,15 +218,14 @@ func (s *Store) QueryClassifications(ctx context.Context, eventIDs []string) ([]
 		for rows.Next() {
 			var c models.Classification
 			if err := rows.Scan(&c.ID, &c.PromptEventID, &c.Category, &c.Confidence, &c.Classifier, &c.CreatedAt); err != nil {
-				rows.Close()
+				_ = rows.Close()
 				return nil, err
-			}
-			all = append(all, c)
-		}
-		rows.Close()
-	}
-	return all, nil
-}
+				}
+				all = append(all, c)
+				}
+				_ = rows.Close()
+				}
+				return all, nil}
 
 func (s *Store) GetUnclassified(ctx context.Context, limit int) ([]models.PromptEvent, error) {
 	query := `SELECT e.id, e.timestamp, e.agent, e.session_id, e.prompt, e.project, e.git_branch, e.git_remote, e.working_dir, e.raw_source, e.created_at
@@ -244,7 +243,7 @@ func (s *Store) GetUnclassified(ctx context.Context, limit int) ([]models.Prompt
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var events []models.PromptEvent
 	for rows.Next() {
@@ -296,7 +295,6 @@ func (s *Store) QuerySessions(ctx context.Context, f store.SessionFilter) ([]mod
 	if f.Agent != "" {
 		query += fmt.Sprintf(" AND agent = $%d", i)
 		args = append(args, f.Agent)
-		i++
 	}
 
 	query += " ORDER BY started_at DESC"
@@ -304,7 +302,7 @@ func (s *Store) QuerySessions(ctx context.Context, f store.SessionFilter) ([]mod
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var sessions []models.Session
 	for rows.Next() {
@@ -335,7 +333,7 @@ func (s *Store) ListProjects(ctx context.Context) ([]models.Project, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var projects []models.Project
 	for rows.Next() {

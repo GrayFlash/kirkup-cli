@@ -19,15 +19,30 @@ import (
 )
 
 func newAgentRegistry(cfg *config.Config) *agent.Registry {
-	adapters := []agent.Adapter{
-		gemini.New(),
-		cursor.New(),
-		claude.New(),
+	var adapters []agent.Adapter
+
+	// Built-in agents
+	builtins := map[string]func() agent.Adapter{
+		"gemini-cli":  func() agent.Adapter { return gemini.New() },
+		"cursor":      func() agent.Adapter { return cursor.New() },
+		"claude-code": func() agent.Adapter { return claude.New() },
+	}
+
+	for name, factory := range builtins {
+		enabled := true
+		if cfg != nil {
+			if ac, ok := cfg.Agents[name]; ok {
+				enabled = ac.Enabled
+			}
+		}
+		if enabled {
+			adapters = append(adapters, factory())
+		}
 	}
 
 	if cfg != nil {
 		for name, ac := range cfg.Agents {
-			if name == "gemini-cli" || name == "cursor" || name == "claude-code" {
+			if _, isBuiltin := builtins[name]; isBuiltin {
 				continue
 			}
 			if ac.Enabled && ac.PromptField != "" {
