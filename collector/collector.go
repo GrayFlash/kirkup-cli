@@ -21,14 +21,15 @@ import (
 
 // Collector watches agent log files and writes new prompt events to the store.
 type Collector struct {
-	agents  *agent.Registry
-	store   store.Store
-	cfg     *config.Config
-	log     *slog.Logger
-	seen    map[string]struct{}
-	mu      sync.Mutex
-	cancel  context.CancelFunc
-	done    chan struct{}
+	agents       *agent.Registry
+	store        store.Store
+	cfg          *config.Config
+	log          *slog.Logger
+	seen         map[string]struct{}
+	seenProjects map[string]struct{}
+	mu           sync.Mutex
+	cancel       context.CancelFunc
+	done         chan struct{}
 }
 
 // New creates a Collector. Call Start to begin watching.
@@ -37,12 +38,13 @@ func New(agents *agent.Registry, s store.Store, cfg *config.Config, log *slog.Lo
 		log = slog.Default()
 	}
 	return &Collector{
-		agents: agents,
-		store:  s,
-		cfg:    cfg,
-		log:    log,
-		seen:   make(map[string]struct{}),
-		done:   make(chan struct{}),
+		agents:       agents,
+		store:        s,
+		cfg:          cfg,
+		log:          log,
+		seen:         make(map[string]struct{}),
+		seenProjects: make(map[string]struct{}),
+		done:         make(chan struct{}),
 	}
 }
 
@@ -70,6 +72,8 @@ func (c *Collector) Start(ctx context.Context) error {
 			c.log.Warn("cannot watch dir", "dir", dir, "err", err)
 		}
 	}
+
+	c.syncConfigProjects(ctx)
 
 	// Initial scan.
 	c.scanAll(ctx, globs)
@@ -193,6 +197,9 @@ func (c *Collector) processFile(ctx context.Context, a agent.Adapter, path strin
 				"project", e.Project,
 				"prompt_prefix", truncate(e.Prompt, 60),
 			)
+			if e.Project != "" {
+				c.ensureProject(ctx, e)
+			}
 		}
 	}
 }
@@ -211,6 +218,51 @@ func (c *Collector) collectGlobs() []globEntry {
 		}
 	}
 	return entries
+}
+
+// syncConfigProjects upserts projects defined in the config file so that
+// ListProjects returns them even before any events are collected.
+func (c *Collector) syncConfigProjects(ctx context.Context) {
+	for _, p := range c.cfg.Projects {
+		proj := &models.Project{
+			Name:        p.Name,
+			DisplayName: p.DisplayName,
+			Paths:       p.Match.Paths,
+		}
+		if p.Match.GitRemote != "" {
+			proj.GitRemotes = []string{p.Match.GitRemote}
+		}
+		if err := c.store.UpsertProject(ctx, proj); err != nil {
+			c.log.Warn("upsert config project", "name", p.Name, "err", err)
+		}
+		c.seenProjects[p.Name] = struct{}{}
+	}
+}
+
+// ensureProject persists a project record the first time the collector
+// encounters a new project name from an event.
+func (c *Collector) ensureProject(ctx context.Context, e *models.PromptEvent) {
+	c.mu.Lock()
+	_, known := c.seenProjects[e.Project]
+	if !known {
+		c.seenProjects[e.Project] = struct{}{}
+	}
+	c.mu.Unlock()
+
+	if known {
+		return
+	}
+
+	proj := &models.Project{Name: e.Project}
+	if e.GitRemote != "" {
+		proj.GitRemotes = []string{e.GitRemote}
+	}
+	if e.WorkingDir != "" {
+		proj.Paths = []string{e.WorkingDir}
+	}
+	if err := c.store.UpsertProject(ctx, proj); err != nil {
+		c.log.Warn("upsert discovered project", "name", e.Project, "err", err)
+	}
 }
 
 type globEntry struct {
