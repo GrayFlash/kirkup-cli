@@ -84,7 +84,7 @@ func tailEvents(ctx context.Context, s store.Store) error {
 					e := events[i]
 					printEvent(e.Timestamp, e.Agent, e.Project, e.Prompt)
 				}
-				last = events[0].Timestamp
+				last = events[0].Timestamp.Add(time.Nanosecond)
 			}
 		}
 	}

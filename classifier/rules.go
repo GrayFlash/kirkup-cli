@@ -153,8 +153,10 @@ var defaultRules = []rawRule{
 func compileRule(r rawRule) Rule {
 	compiled := Rule{
 		Category: r.Category,
-		Keywords: r.Keywords,
 		Priority: r.Priority,
+	}
+	for _, kw := range r.Keywords {
+		compiled.Keywords = append(compiled.Keywords, strings.ToLower(kw))
 	}
 	for _, p := range r.Patterns {
 		if re, err := regexp.Compile(p); err == nil {

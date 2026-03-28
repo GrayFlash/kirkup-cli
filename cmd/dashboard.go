@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -21,28 +22,40 @@ func init() {
 }
 
 func runDashboard(_ *cobra.Command, _ []string) error {
-	// Check if docker-compose.yaml exists in the expected location
-	// For now, assume it's in the repo or a known install location.
-	// Since this is a CLI, we might want to embed the yaml or write it to ~/.kirkup/dashboard/
-	
 	dir, err := kirkupDir()
 	if err != nil {
 		return err
 	}
-	dashDir := dir + "/dashboard"
+	dashDir := filepath.Join(dir, "dashboard")
 	if err := os.MkdirAll(dashDir, 0o755); err != nil {
 		return err
 	}
-	
-	composePath := dashDir + "/docker-compose.yaml"
-	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		fmt.Println("creating dashboard configuration...")
-		if err := os.WriteFile(composePath, []byte(dashboardCompose), 0o644); err != nil {
-			return err
+
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	composePath := filepath.Join(dashDir, "docker-compose.yaml")
+	var composeContent string
+
+	if cfg.Store.Driver == "sqlite" {
+		sqlitePath := cfg.Store.SQLite.Path
+		if !filepath.IsAbs(sqlitePath) {
+			sqlitePath = filepath.Join(dir, sqlitePath)
 		}
+		composeContent = fmt.Sprintf(dashboardComposeSQLite, sqlitePath)
+	} else if cfg.Store.Driver == "postgres" {
+		composeContent = fmt.Sprintf(dashboardComposePostgres, cfg.Store.PG.DSN)
+	} else {
+		return fmt.Errorf("unsupported store driver for dashboard: %q", cfg.Store.Driver)
 	}
 
 	fmt.Println("launching dashboard via docker-compose...")
+	if err := os.WriteFile(composePath, []byte(composeContent), 0o644); err != nil {
+		return err
+	}
+
 	cmd := exec.Command("docker-compose", "-f", composePath, "up", "-d")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -56,7 +69,7 @@ func runDashboard(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-const dashboardCompose = `version: "3.7"
+const dashboardComposeSQLite = `version: "3.7"
 
 services:
   metabase:
@@ -66,8 +79,27 @@ services:
       - "3000:3000"
     volumes:
       - ./metabase-data:/metabase-data
-      - ../kirkup.db:/data/kirkup.db:ro
+      - %s:/data/kirkup.db:ro
     environment:
       - MB_DB_FILE=/metabase-data/metabase.db
+      - MB_DB_TYPE=sqlite
+      - MB_DB_DBNAME=/data/kirkup.db
+    restart: unless-stopped
+`
+
+const dashboardComposePostgres = `version: "3.7"
+
+services:
+  metabase:
+    image: metabase/metabase:latest
+    container_name: kirkup-dashboard
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./metabase-data:/metabase-data
+    environment:
+      - MB_DB_FILE=/metabase-data/metabase.db
+      - MB_DB_TYPE=postgres
+      - MB_DB_CONNECTION_URI=%s
     restart: unless-stopped
 `

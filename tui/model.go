@@ -84,6 +84,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.summary = msg.summary
 		if msg.projects != nil {
 			m.projects = msg.projects
+			if m.selected >= len(m.projects) {
+				m.selected = 0
+			}
 		}
 		return m, nil
 

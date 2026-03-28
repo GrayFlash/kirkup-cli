@@ -179,6 +179,9 @@ func (s *Store) InsertClassification(ctx context.Context, c *models.Classificati
 	if c.ID == "" {
 		c.ID = newID()
 	}
+	if c.CreatedAt.IsZero() {
+		c.CreatedAt = time.Now().UTC()
+	}
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO classifications (id, prompt_event_id, category, confidence, classifier, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6)
@@ -210,7 +213,7 @@ func (s *Store) QueryClassifications(ctx context.Context, eventIDs []string) ([]
 		}
 		query := fmt.Sprintf(`SELECT id, prompt_event_id, category, confidence, classifier, created_at
 		                      FROM classifications WHERE prompt_event_id IN (%s)`, strings.Join(placeholders, ","))
-		
+
 		rows, err := s.db.QueryContext(ctx, query, args...)
 		if err != nil {
 			return nil, err
@@ -220,12 +223,16 @@ func (s *Store) QueryClassifications(ctx context.Context, eventIDs []string) ([]
 			if err := rows.Scan(&c.ID, &c.PromptEventID, &c.Category, &c.Confidence, &c.Classifier, &c.CreatedAt); err != nil {
 				_ = rows.Close()
 				return nil, err
-				}
-				all = append(all, c)
-				}
-				_ = rows.Close()
-				}
-				return all, nil}
+			}
+			all = append(all, c)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		_ = rows.Close()
+	}
+	return all, nil
+}
 
 func (s *Store) GetUnclassified(ctx context.Context, limit int) ([]models.PromptEvent, error) {
 	query := `SELECT e.id, e.timestamp, e.agent, e.session_id, e.prompt, e.project, e.git_branch, e.git_remote, e.working_dir, e.raw_source, e.created_at

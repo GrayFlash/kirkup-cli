@@ -65,6 +65,8 @@ func New(agents *agent.Registry, s store.Store, cfg *config.Config, log *slog.Lo
 		for _, p := range patterns {
 			if re, err := regexp.Compile(p); err == nil {
 				c.redactionPatterns = append(c.redactionPatterns, re)
+			} else {
+				c.log.Warn("invalid privacy redaction pattern", "pattern", p, "err", err)
 			}
 		}
 	}
@@ -302,10 +304,11 @@ func (c *Collector) syncConfigProjects(ctx context.Context) {
 		}
 		if err := c.store.UpsertProject(ctx, proj); err != nil {
 			c.log.Warn("upsert config project", "name", p.Name, "err", err)
+		} else {
+			c.mu.Lock()
+			c.seenProjects[p.Name] = struct{}{}
+			c.mu.Unlock()
 		}
-		c.mu.Lock()
-		c.seenProjects[p.Name] = struct{}{}
-		c.mu.Unlock()
 	}
 }
 
@@ -314,9 +317,6 @@ func (c *Collector) syncConfigProjects(ctx context.Context) {
 func (c *Collector) ensureProject(ctx context.Context, e *models.PromptEvent) {
 	c.mu.Lock()
 	_, known := c.seenProjects[e.Project]
-	if !known {
-		c.seenProjects[e.Project] = struct{}{}
-	}
 	c.mu.Unlock()
 
 	if known {
@@ -332,6 +332,10 @@ func (c *Collector) ensureProject(ctx context.Context, e *models.PromptEvent) {
 	}
 	if err := c.store.UpsertProject(ctx, proj); err != nil {
 		c.log.Warn("upsert discovered project", "name", e.Project, "err", err)
+	} else {
+		c.mu.Lock()
+		c.seenProjects[e.Project] = struct{}{}
+		c.mu.Unlock()
 	}
 }
 

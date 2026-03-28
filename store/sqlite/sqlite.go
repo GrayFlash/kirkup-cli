@@ -85,6 +85,7 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("enable foreign keys: %w", err)
 	}
+	db.SetMaxOpenConns(1)
 	return &Store{db: db}, nil
 }
 

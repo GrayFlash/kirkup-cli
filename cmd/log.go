@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -41,7 +42,7 @@ func runLog(_ *cobra.Command, args []string) error {
 	}
 	defer cleanup()
 
-	description := args[0]
+	description := strings.Join(args, " ")
 
 	// Use regex redaction
 	if cfg.Privacy.Redact {
@@ -86,7 +87,9 @@ func runLog(_ *cobra.Command, args []string) error {
 			Classifier:    "manual",
 			CreatedAt:     time.Now().UTC(),
 		}
-		_ = s.InsertClassification(context.Background(), c)
+		if err := s.InsertClassification(context.Background(), c); err != nil {
+			fmt.Printf("warning: failed to insert classification: %v\n", err)
+		}
 	} else {
 		// Run rule-based classification immediately for this single event
 		rc := classifier.NewRuleClassifier()
@@ -95,8 +98,11 @@ func runLog(_ *cobra.Command, args []string) error {
 		}
 		cs, err := rc.Classify(context.Background(), []models.PromptEvent{*e})
 		if err == nil && len(cs) > 0 {
-			_ = s.InsertClassification(context.Background(), &cs[0])
-			fmt.Printf("Auto-categorised as: %s\n", cs[0].Category)
+			if err := s.InsertClassification(context.Background(), &cs[0]); err != nil {
+				fmt.Printf("warning: failed to auto-classify: %v\n", err)
+			} else {
+				fmt.Printf("Auto-categorised as: %s\n", cs[0].Category)
+			}
 		}
 	}
 
