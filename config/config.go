@@ -83,6 +83,13 @@ func Load(path string) (*Config, error) {
 		cfg.Agents[name] = agent
 	}
 
+	if cfg.Daemon.PollIntervalSeconds < 1 {
+		cfg.Daemon.PollIntervalSeconds = 1
+	}
+	if cfg.Sessions.GapThresholdMinutes < 1 {
+		cfg.Sessions.GapThresholdMinutes = 1
+	}
+
 	return cfg, nil
 }
 

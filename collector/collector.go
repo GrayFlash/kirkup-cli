@@ -235,7 +235,9 @@ func (c *Collector) syncConfigProjects(ctx context.Context) {
 		if err := c.store.UpsertProject(ctx, proj); err != nil {
 			c.log.Warn("upsert config project", "name", p.Name, "err", err)
 		}
+		c.mu.Lock()
 		c.seenProjects[p.Name] = struct{}{}
+		c.mu.Unlock()
 	}
 }
 

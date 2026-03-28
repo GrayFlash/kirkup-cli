@@ -75,8 +75,22 @@ func renderRight(summary *retro.Summary, focused bool, width, height int) string
 			}
 			label := d.Date.Format("Mon Jan 2")
 			count := styleMuted.Render(fmt.Sprintf("%d prompts", d.Prompts))
-			bar := styleBar.Render(strings.Repeat("█", int(pct/100*float64(barW)))) +
-				styleBarEmpty.Render(strings.Repeat("░", barW-int(pct/100*float64(barW))))
+			
+			filled := int(pct / 100 * float64(barW))
+			if filled < 0 {
+				filled = 0
+			}
+			if filled > barW {
+				filled = barW
+			}
+			safeBarW := barW
+			if safeBarW < 0 {
+				safeBarW = 0
+				filled = 0
+			}
+
+			bar := styleBar.Render(strings.Repeat("█", filled)) +
+				styleBarEmpty.Render(strings.Repeat("░", safeBarW-filled))
 			sections = append(sections, fmt.Sprintf(" %-12s %s  %s",
 				lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Render(label),
 				bar,

@@ -151,6 +151,9 @@ func renderDailyActivity(ew *errWriter, s *Summary) {
 // bar renders a fixed-width bar chart segment.
 func bar(percent float64) string {
 	filled := int(math.Round(percent / 100 * barWidth))
+	if filled < 0 {
+		filled = 0
+	}
 	if filled > barWidth {
 		filled = barWidth
 	}

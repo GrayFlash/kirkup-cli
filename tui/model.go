@@ -159,7 +159,13 @@ func (m Model) View() string {
 	bodyH := m.height - headerH - footerH - helpH
 
 	leftW := 28
+	if leftW > m.width {
+		leftW = m.width
+	}
 	rightW := m.width - leftW - 1
+	if rightW < 0 {
+		rightW = 0
+	}
 
 	left := renderLeft(m.projects, m.selected, m.focus == panelLeft, leftW, bodyH)
 	right := renderRight(m.summary, m.focus == panelRight, rightW, bodyH)
