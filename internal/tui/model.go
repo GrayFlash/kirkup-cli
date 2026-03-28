@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/GrayFlash/kirkup-cli/retro"
+	"github.com/GrayFlash/kirkup-cli/internal/retro"
 	"github.com/GrayFlash/kirkup-cli/store"
 )
 

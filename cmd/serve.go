@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/GrayFlash/kirkup-cli/collector"
+	"github.com/GrayFlash/kirkup-cli/internal/collector"
 )
 
 var serveCmd = &cobra.Command{

@@ -12,7 +12,7 @@ var (
 	date    = "unknown"
 )
 
-//go:embed configs/default.yaml
+//go:embed config/defaults/default.yaml
 var defaultConfig []byte
 
 func main() {

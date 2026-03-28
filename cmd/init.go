@@ -91,7 +91,7 @@ func defaultConfigBytes() []byte {
 		return DefaultConfig
 	}
 	// Fallback for go run / tests where embed is not set.
-	if data, err := os.ReadFile("configs/default.yaml"); err == nil {
+	if data, err := os.ReadFile("config/defaults/default.yaml"); err == nil {
 		return data
 	}
 	return []byte(minimalConfig)

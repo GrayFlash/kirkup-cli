@@ -16,6 +16,7 @@ import (
 
 	"github.com/GrayFlash/kirkup-cli/agent"
 	"github.com/GrayFlash/kirkup-cli/config"
+	kctx "github.com/GrayFlash/kirkup-cli/internal/context"
 	"github.com/GrayFlash/kirkup-cli/models"
 	"github.com/GrayFlash/kirkup-cli/store"
 )
@@ -239,7 +240,7 @@ func (c *Collector) processFile(ctx context.Context, a agent.Adapter, path strin
 
 		// Enrich with git context if we have a working directory.
 		if e.WorkingDir != "" && (e.GitRemote == "" || e.GitBranch == "") {
-			gi := GitContext(e.WorkingDir)
+			gi := kctx.GitContext(e.WorkingDir)
 			if e.GitRemote == "" {
 				e.GitRemote = gi.Remote
 			}
@@ -250,7 +251,7 @@ func (c *Collector) processFile(ctx context.Context, a agent.Adapter, path strin
 
 		// Resolve project name.
 		if e.Project == "" {
-			e.Project = ResolveProject(c.cfg.Projects, e.GitRemote, e.WorkingDir)
+			e.Project = kctx.ResolveProject(c.cfg.Projects, e.GitRemote, e.WorkingDir)
 		}
 
 		if err := c.store.InsertPromptEvent(ctx, e); err != nil {

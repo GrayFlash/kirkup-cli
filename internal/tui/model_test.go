@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"github.com/GrayFlash/kirkup-cli/retro"
+	"github.com/GrayFlash/kirkup-cli/internal/retro"
 )
 
 func TestModel_ViewNarrow(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/GrayFlash/kirkup-cli/retro"
+	"github.com/GrayFlash/kirkup-cli/internal/retro"
 )
 
 // renderRight renders the summary panel.

@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/GrayFlash/kirkup-cli/retro"
+	"github.com/GrayFlash/kirkup-cli/internal/retro"
 )
 
 var (

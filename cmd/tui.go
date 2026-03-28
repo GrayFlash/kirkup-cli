@@ -4,7 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	"github.com/GrayFlash/kirkup-cli/tui"
+	"github.com/GrayFlash/kirkup-cli/internal/tui"
 )
 
 var tuiCmd = &cobra.Command{
