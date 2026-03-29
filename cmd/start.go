@@ -55,6 +55,8 @@ func runStart(_ *cobra.Command, _ []string) error {
 	}
 
 	if err := writePID(pidPath, cmd.Process.Pid); err != nil {
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
 		return fmt.Errorf("write pid file: %w", err)
 	}
 

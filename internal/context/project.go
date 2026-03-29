@@ -30,7 +30,7 @@ func ResolveProject(projects []config.ProjectConfig, gitRemote, workingDir strin
 		for _, p := range projects {
 			for _, path := range p.Match.Paths {
 				expanded := config.ExpandHome(path)
-				if strings.HasPrefix(workingDir, expanded) {
+				if workingDir == expanded || strings.HasPrefix(workingDir, expanded+string(filepath.Separator)) {
 					return p.Name
 				}
 			}
