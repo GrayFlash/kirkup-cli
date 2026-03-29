@@ -42,6 +42,8 @@ type LLMConfig struct {
 	Endpoint  string `yaml:"endpoint"`
 	APIKey    string `yaml:"api_key"`
 	BatchSize int    `yaml:"batch_size"`
+	ProjectID string `yaml:"project_id"` // Used by Vertex AI
+	Location  string `yaml:"location"`   // Used by Vertex AI
 }
 
 type ProjectConfig struct {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -66,6 +67,8 @@ func (c *LLMClassifier) classifyBatch(ctx context.Context, batch []models.Prompt
 		response, err = c.callOpenAI(ctx, prompt)
 	case "anthropic":
 		response, err = c.callAnthropic(ctx, prompt)
+	case "vertex":
+		response, err = c.callVertexAI(ctx, prompt)
 	default:
 		return nil, fmt.Errorf("unsupported LLM provider: %q", c.cfg.Provider)
 	}
@@ -91,7 +94,10 @@ func (c *LLMClassifier) callOpenAI(ctx context.Context, prompt string) (string, 
 		"response_format": map[string]string{"type": "json_object"},
 	}
 
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("marshal request: %w", err)
+	}
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", err
@@ -100,7 +106,8 @@ func (c *LLMClassifier) callOpenAI(ctx context.Context, prompt string) (string, 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -143,7 +150,10 @@ func (c *LLMClassifier) callAnthropic(ctx context.Context, prompt string) (strin
 		},
 	}
 
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("marshal request: %w", err)
+	}
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", err
@@ -153,7 +163,8 @@ func (c *LLMClassifier) callAnthropic(ctx context.Context, prompt string) (strin
 	req.Header.Set("x-api-key", c.cfg.APIKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -183,7 +194,8 @@ func (c *LLMClassifier) callAnthropic(ctx context.Context, prompt string) (strin
 func (c *LLMClassifier) buildPrompt(batch []models.PromptEvent) string {
 	var sb bytes.Buffer
 	sb.WriteString("You are an assistant that categorizes AI coding prompts into one of the following categories:\n")
-	sb.WriteString("- coding: implementing features, fixing bugs, writing logic\n")
+	sb.WriteString("- coding: implementing features, writing logic\n")
+	sb.WriteString("- debugging: fixing bugs, why is this broken, stacktraces\n")
 	sb.WriteString("- testing: writing tests, mocking, benchmarking\n")
 	sb.WriteString("- refactoring: renaming, restructuring, cleaning up code\n")
 	sb.WriteString("- review: reviewing PRs, explaining diffs\n")
@@ -212,13 +224,17 @@ func (c *LLMClassifier) callOllama(ctx context.Context, prompt string) (string, 
 		"format": "json",
 	}
 	
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("marshal request: %w", err)
+	}
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", err
 	}
 	
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -277,3 +293,94 @@ func (c *LLMClassifier) parseResponse(batch []models.PromptEvent, response strin
 	
 	return results, nil
 }
+
+func (c *LLMClassifier) callVertexAI(ctx context.Context, prompt string) (string, error) {
+	location := c.cfg.Location
+	if location == "" {
+		location = "us-central1"
+	}
+	project := c.cfg.ProjectID
+	if project == "" {
+		return "", fmt.Errorf("vertex ai requires project_id to be set in config")
+	}
+	model := c.cfg.Model
+	if model == "" {
+		model = "gemini-1.5-flash"
+	}
+
+	url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:generateContent", location, project, location, model)
+	if c.cfg.Endpoint != "" {
+		url = c.cfg.Endpoint
+	}
+
+	token := c.cfg.APIKey
+	if token == "" {
+		// Attempt to fetch ADC token via gcloud
+		cmd := exec.CommandContext(ctx, "gcloud", "auth", "print-access-token")
+		out, err := cmd.Output()
+		if err != nil {
+			return "", fmt.Errorf("failed to get gcloud token: %w. Provide api_key or install gcloud CLI", err)
+		}
+		token = strings.TrimSpace(string(out))
+	}
+
+	body := map[string]any{
+		"contents": []map[string]any{
+			{
+				"role": "user",
+				"parts": []map[string]any{
+					{"text": prompt},
+				},
+			},
+		},
+		"generationConfig": map[string]any{
+			"responseMimeType": "application/json",
+		},
+	}
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("vertex ai error (status %d): %s", resp.StatusCode, string(data))
+	}
+
+	var res struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", err
+	}
+
+	if len(res.Candidates) == 0 || len(res.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("vertex ai returned no content")
+	}
+
+	return res.Candidates[0].Content.Parts[0].Text, nil
+}
+

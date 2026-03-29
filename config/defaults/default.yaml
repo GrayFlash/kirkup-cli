@@ -40,11 +40,13 @@ classifier:
   mode: rules             # rules, llm, or both
   custom_rules: []
   llm:
-    provider: ollama      # ollama, openai, or anthropic
-    model: llama3         # or gpt-4o, claude-3-5-sonnet-20240620
+    provider: ollama      # ollama, openai, anthropic, or vertex
+    model: llama3         # or gpt-4o, claude-3-5-sonnet-20240620, gemini-1.5-flash
     endpoint: ""          # optional override
-    api_key: ""           # required for openai/anthropic
+    api_key: ""           # required for openai/anthropic. For vertex, kirkup uses gcloud auth if empty.
     batch_size: 10
+    project_id: ""        # required for vertex
+    location: "us-central1" # used by vertex
 
 # Privacy
 privacy:
