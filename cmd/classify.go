@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -68,7 +69,8 @@ func runClassify(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("unsupported mode %q", mode)
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 
 	if classifyReclassify {
 		all, err := s.QueryPromptEvents(ctx, store.EventFilter{})

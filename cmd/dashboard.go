@@ -53,7 +53,7 @@ func runDashboard(_ *cobra.Command, _ []string) error {
 	}
 
 	fmt.Println("launching dashboard via docker-compose...")
-	if err := os.WriteFile(composePath, []byte(composeContent), 0o644); err != nil {
+	if err := os.WriteFile(composePath, []byte(composeContent), 0o600); err != nil {
 		return err
 	}
 
