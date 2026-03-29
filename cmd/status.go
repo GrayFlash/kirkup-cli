@@ -21,8 +21,10 @@ func init() {
 
 func runStatus(_ *cobra.Command, _ []string) error {
 	// Daemon status
-	pidPath, _ := pidFilePath()
-	if pid, err := readPID(pidPath); err == nil && isRunning(pid) {
+	pidPath, err := pidFilePath()
+	if err != nil {
+		fmt.Printf("daemon:  unknown (error: %v)\n", err)
+	} else if pid, err := readPID(pidPath); err == nil && isRunning(pid) {
 		fmt.Printf("daemon:  running (pid %d)\n", pid)
 	} else {
 		fmt.Println("daemon:  stopped")

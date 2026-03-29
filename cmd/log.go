@@ -149,8 +149,8 @@ func runLog(_ *cobra.Command, args []string) error {
 	fmt.Printf("Logged activity: %s\n", description)
 	fmt.Printf("  Duration: %s (%s - %s)\n",
 		dur,
-		startTime.Local().Format("15:04"),
-		endTime.Local().Format("15:04"),
+		startTime.Local().Format("Jan 02 15:04"),
+		endTime.Local().Format("Jan 02 15:04"),
 	)
 
 	if lastCategory != "" {

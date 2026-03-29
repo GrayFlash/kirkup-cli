@@ -8,8 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/GrayFlash/kirkup-cli/store"
-)
+	)
 
 var projectsCmd = &cobra.Command{
 	Use:   "projects",
@@ -35,19 +34,17 @@ func runProjects(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// Also discover projects from event history that aren't in the registry.
-	events, err := s.QueryPromptEvents(ctx, store.EventFilter{})
+	pStats, err := s.ProjectStats(ctx)
 	if err != nil {
 		return err
 	}
+
 	seen := make(map[string]struct{})
 	for _, p := range projects {
 		seen[p.Name] = struct{}{}
 	}
-	for _, e := range events {
-		if e.Project != "" {
-			seen[e.Project] = struct{}{}
-		}
+	for _, st := range pStats {
+		seen[st.Name] = struct{}{}
 	}
 
 	if len(seen) == 0 {
@@ -55,22 +52,15 @@ func runProjects(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	// Count prompts and last-seen per project.
 	type stat struct {
 		prompts  int
 		lastSeen time.Time
 	}
 	stats := make(map[string]*stat)
-	for _, e := range events {
-		if e.Project == "" {
-			continue
-		}
-		if stats[e.Project] == nil {
-			stats[e.Project] = &stat{}
-		}
-		stats[e.Project].prompts++
-		if e.Timestamp.After(stats[e.Project].lastSeen) {
-			stats[e.Project].lastSeen = e.Timestamp
+	for _, st := range pStats {
+		stats[st.Name] = &stat{
+			prompts:  st.Prompts,
+			lastSeen: st.LastSeen,
 		}
 	}
 

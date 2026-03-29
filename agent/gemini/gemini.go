@@ -59,9 +59,13 @@ func (a *Adapter) Events(ctx context.Context, path string) ([]models.PromptEvent
 		if e.Role != "user" {
 			continue
 		}
+		ts, err := e.timestamp()
+		if err != nil {
+			continue
+		}
 		events = append(events, models.PromptEvent{
 			Agent:      "gemini-cli",
-			Timestamp:  e.timestamp(),
+			Timestamp:  ts,
 			Prompt:     e.Content,
 			WorkingDir: cwd,
 			RawSource:  e.SessionID,
@@ -77,9 +81,8 @@ type logEntry struct {
 	Time      string `json:"time"` // RFC3339
 }
 
-func (e logEntry) timestamp() time.Time {
-	t, _ := time.Parse(time.RFC3339, e.Time)
-	return t
+func (e logEntry) timestamp() (time.Time, error) {
+	return time.Parse(time.RFC3339, e.Time)
 }
 
 func readProjectRoot(logsPath string) string {

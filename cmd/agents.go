@@ -17,7 +17,10 @@ func init() {
 }
 
 func runAgents(_ *cobra.Command, _ []string) error {
-	cfg, _ := loadConfig()
+	cfg, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
 	registry := newAgentRegistry(cfg)
 
 	for _, a := range registry.All() {

@@ -57,9 +57,13 @@ func (a *Adapter) Events(ctx context.Context, path string) ([]models.PromptEvent
 		if msg.Role != "user" {
 			continue
 		}
+		ts, err := msg.timestamp()
+		if err != nil {
+			continue
+		}
 		events = append(events, models.PromptEvent{
 			Agent:     "claude-code",
-			Timestamp: msg.timestamp(),
+			Timestamp: ts,
 			Prompt:    msg.Content,
 			RawSource: msg.ProjectID,
 		})
@@ -74,9 +78,8 @@ type chatMessage struct {
 	CreatedAt string `json:"createdAt"`
 }
 
-func (m chatMessage) timestamp() time.Time {
-	t, _ := time.Parse(time.RFC3339, m.CreatedAt)
-	return t
+func (m chatMessage) timestamp() (time.Time, error) {
+	return time.Parse(time.RFC3339, m.CreatedAt)
 }
 
 func claudeBase() (string, bool) {

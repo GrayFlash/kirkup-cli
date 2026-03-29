@@ -54,6 +54,11 @@ func (a *Adapter) parseJSON(ctx context.Context, path string) ([]models.PromptEv
 	case []any:
 		var events []models.PromptEvent
 		for _, item := range v {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+			}
 			if m, ok := item.(map[string]any); ok {
 				if e, ok := a.mapEvent(m); ok {
 					events = append(events, e)

@@ -421,3 +421,28 @@ func splitStrings(s string) []string {
 	out = append(out, s[start:])
 	return out
 }
+
+func (s *Store) ProjectStats(ctx context.Context) ([]models.ProjectStat, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT project, COUNT(*) as prompts, MAX(timestamp) as last_seen 
+		FROM prompt_events 
+		WHERE project != ''
+		GROUP BY project
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []models.ProjectStat
+	for rows.Next() {
+		var st models.ProjectStat
+		var t int64
+		if err := rows.Scan(&st.Name, &st.Prompts, &t); err != nil {
+			return nil, err
+		}
+		st.LastSeen = time.Unix(t, 0)
+		stats = append(stats, st)
+	}
+	return stats, rows.Err()
+}

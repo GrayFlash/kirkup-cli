@@ -58,6 +58,7 @@ func (m *mockFullStore) QuerySessions(ctx context.Context, f store.SessionFilter
 }
 func (m *mockFullStore) UpsertProject(ctx context.Context, p *models.Project) error { return nil }
 func (m *mockFullStore) ListProjects(ctx context.Context) ([]models.Project, error) { return nil, nil }
+func (m *mockFullStore) ProjectStats(ctx context.Context) ([]models.ProjectStat, error) { return nil, nil }
 func (m *mockFullStore) Close() error                                               { return nil }
 func (m *mockFullStore) Migrate(ctx context.Context) error                          { return nil }
 

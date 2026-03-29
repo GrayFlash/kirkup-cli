@@ -5,6 +5,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/GrayFlash/kirkup-cli/models"
@@ -21,6 +22,7 @@ type Rule struct {
 
 // RuleClassifier classifies prompt events using keyword and regex rules.
 type RuleClassifier struct {
+	mu    sync.RWMutex
 	rules []Rule
 }
 
@@ -39,6 +41,8 @@ func (rc *RuleClassifier) Name() string { return "rules-v1" }
 // AddRule appends a custom rule. Higher priority rules are checked first.
 func (rc *RuleClassifier) AddRule(category string, keywords []string, patterns []string, priority int) {
 	r := rawRule{category, keywords, patterns, priority}
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 	rc.rules = append(rc.rules, compileRule(r))
 	// Keep rules sorted by priority descending.
 	sortRules(rc.rules)
@@ -68,6 +72,8 @@ func (rc *RuleClassifier) Classify(_ context.Context, events []models.PromptEven
 // classify returns the category for a single prompt text.
 func (rc *RuleClassifier) classify(prompt string) (string, bool) {
 	lower := strings.ToLower(prompt)
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
 	for _, r := range rc.rules {
 		if matchesRule(r, lower) {
 			return r.Category, true

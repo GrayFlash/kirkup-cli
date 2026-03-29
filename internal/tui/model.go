@@ -160,6 +160,9 @@ func (m Model) View() string {
 	footerH := lipgloss.Height(footer)
 	helpH := lipgloss.Height(help)
 	bodyH := m.height - headerH - footerH - helpH
+	if bodyH < 0 {
+		bodyH = 0
+	}
 
 	leftW := 28
 	if leftW > m.width {

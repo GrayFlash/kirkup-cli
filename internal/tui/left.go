@@ -28,7 +28,11 @@ func renderLeft(projects []projectEntry, selected int, focused bool, width, heig
 	for i, p := range projects {
 		name := p.name
 		if name == "" {
-			name = "(unknown)"
+			if i == 0 {
+				name = "All Projects"
+			} else {
+				name = "(unknown)"
+			}
 		}
 
 		nameLen := contentW - 7

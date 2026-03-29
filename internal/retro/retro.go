@@ -274,7 +274,8 @@ func dailyStats(events []models.PromptEvent, from, to time.Time) []DayStat {
 
 	// Enumerate each day in the range.
 	var stats []DayStat
-	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
+	startDay := dateOf(from)
+	for d := startDay; !d.After(to); d = d.AddDate(0, 0, 1) {
 		k := dayKey(d.Local().Format("2006-01-02"))
 		data := days[k]
 		if data == nil {

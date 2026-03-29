@@ -74,7 +74,7 @@ func (a *Adapter) Events(ctx context.Context, path string) ([]models.PromptEvent
 	}
 	defer func() { _ = db.Close() }()
 
-	meta, err := readChatMeta(db)
+	meta, err := readChatMeta(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -144,9 +144,9 @@ func (a *Adapter) Events(ctx context.Context, path string) ([]models.PromptEvent
 	return events, nil
 }
 
-func readChatMeta(db *sql.DB) (chatMeta, error) {
+func readChatMeta(ctx context.Context, db *sql.DB) (chatMeta, error) {
 	var raw []byte
-	if err := db.QueryRow("SELECT value FROM meta WHERE key = '0'").Scan(&raw); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT value FROM meta WHERE key = '0'").Scan(&raw); err != nil {
 		return chatMeta{}, err
 	}
 

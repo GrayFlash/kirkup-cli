@@ -25,6 +25,7 @@ type Store interface {
 	// Projects
 	UpsertProject(ctx context.Context, p *models.Project) error
 	ListProjects(ctx context.Context) ([]models.Project, error)
+	ProjectStats(ctx context.Context) ([]models.ProjectStat, error)
 
 	// Lifecycle
 	Migrate(ctx context.Context) error

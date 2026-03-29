@@ -34,7 +34,6 @@ func (c *LLMClassifier) Name() string {
 }
 
 func (c *LLMClassifier) Classify(ctx context.Context, events []models.PromptEvent) ([]models.Classification, error) {
-	fmt.Println("warning: LLM classification sends full prompt text to the configured provider.")
 
 	var results []models.Classification
 

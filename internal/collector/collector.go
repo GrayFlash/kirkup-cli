@@ -35,8 +35,10 @@ type Collector struct {
 	statsProcessed int
 	statsNew       int
 
+	started           bool
 	redactionPatterns []*regexp.Regexp
 	fileState         map[string]time.Time
+	parseErrors       map[string]int
 }
 
 // New creates a Collector. Call Start to begin watching.
@@ -52,6 +54,7 @@ func New(agents *agent.Registry, s store.Store, cfg *config.Config, log *slog.Lo
 		seen:         make(map[string]struct{}),
 		seenProjects: make(map[string]struct{}),
 		fileState:    make(map[string]time.Time),
+		parseErrors:  make(map[string]int),
 		done:         make(chan struct{}),
 	}
 
@@ -84,6 +87,9 @@ func New(agents *agent.Registry, s store.Store, cfg *config.Config, log *slog.Lo
 // Start performs an initial scan of all agent files, then watches for changes.
 // It blocks until ctx is cancelled or Stop is called.
 func (c *Collector) Start(ctx context.Context) error {
+	c.mu.Lock()
+	c.started = true
+	c.mu.Unlock()
 	ctx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
 
@@ -145,6 +151,12 @@ func (c *Collector) Start(ctx context.Context) error {
 
 // Stop signals the collector to shut down and waits for it to finish.
 func (c *Collector) Stop() {
+	c.mu.Lock()
+	wasStarted := c.started
+	c.mu.Unlock()
+	if !wasStarted {
+		return
+	}
 	if c.cancel != nil {
 		c.cancel()
 	}
@@ -231,11 +243,21 @@ func (c *Collector) processFile(ctx context.Context, a agent.Adapter, path strin
 
 	events, err := a.Events(ctx, path)
 	if err != nil {
-		c.log.Debug("parse error", "agent", a.Name(), "path", path, "err", err)
+		c.mu.Lock()
+		c.parseErrors[path]++
+		failures := c.parseErrors[path]
+		c.mu.Unlock()
+
+		if failures <= 3 {
+			c.log.Warn("parse error (will retry later)", "agent", a.Name(), "path", path, "err", err, "failures", failures)
+		} else if failures%100 == 0 {
+			c.log.Warn("persistent parse error", "agent", a.Name(), "path", path, "err", err, "failures", failures)
+		}
 		return
 	}
 
 	c.mu.Lock()
+	c.parseErrors[path] = 0
 	c.fileState[path] = info.ModTime()
 	c.mu.Unlock()
 

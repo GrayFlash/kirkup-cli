@@ -56,6 +56,7 @@ func runClassify(_ *cobra.Command, _ []string) error {
 	var cl classifier.Classifier
 	switch mode {
 	case "llm":
+		fmt.Println("warning: LLM classification sends full prompt text to the configured provider.")
 		cl = classifier.NewLLMClassifier(cfg.Classifier.LLM)
 	case "rules":
 		rc := classifier.NewRuleClassifier()
@@ -91,7 +92,8 @@ func runClassify(_ *cobra.Command, _ []string) error {
 				errs++
 			}
 		}
-		fmt.Printf("reclassified %d / %d events\n", inserted, len(all))
+		skipped := len(all) - len(classifications)
+		fmt.Printf("processed %d events: %d reclassified, %d skipped (no match)\n", len(all), inserted, skipped)
 		if errs > 0 {
 			fmt.Printf("warning: failed to insert %d classifications\n", errs)
 		}

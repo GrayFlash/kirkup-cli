@@ -227,6 +227,7 @@ func (s *Store) QueryClassifications(ctx context.Context, eventIDs []string) ([]
 			all = append(all, c)
 		}
 		if err := rows.Err(); err != nil {
+			_ = rows.Close()
 			return nil, err
 		}
 		_ = rows.Close()
@@ -323,14 +324,17 @@ func (s *Store) QuerySessions(ctx context.Context, f store.SessionFilter) ([]mod
 }
 
 func (s *Store) UpsertProject(ctx context.Context, p *models.Project) error {
+	if p.CreatedAt.IsZero() {
+		p.CreatedAt = time.Now().UTC()
+	}
 	gitRemotes := strings.Join(p.GitRemotes, "\n")
 	paths := strings.Join(p.Paths, "\n")
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO projects (name, display_name, git_remotes, paths)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO projects (name, display_name, git_remotes, paths, created_at)
+		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (name) DO UPDATE SET
 		 display_name = EXCLUDED.display_name, git_remotes = EXCLUDED.git_remotes, paths = EXCLUDED.paths`,
-		p.Name, p.DisplayName, gitRemotes, paths,
+		p.Name, p.DisplayName, gitRemotes, paths, p.CreatedAt.UTC(),
 	)
 	return err
 }
@@ -369,4 +373,27 @@ func splitStrings(s string) []string {
 		return nil
 	}
 	return strings.Split(s, "\n")
+}
+
+func (s *Store) ProjectStats(ctx context.Context) ([]models.ProjectStat, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT project, COUNT(*) as prompts, MAX(timestamp) as last_seen 
+		FROM prompt_events 
+		WHERE project != ''
+		GROUP BY project
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []models.ProjectStat
+	for rows.Next() {
+		var st models.ProjectStat
+		if err := rows.Scan(&st.Name, &st.Prompts, &st.LastSeen); err != nil {
+			return nil, err
+		}
+		stats = append(stats, st)
+	}
+	return stats, rows.Err()
 }
