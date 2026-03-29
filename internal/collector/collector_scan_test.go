@@ -36,7 +36,7 @@ func (m *mockFullStore) InsertPromptEvent(ctx context.Context, e *models.PromptE
 func (m *mockFullStore) QueryPromptEvents(ctx context.Context, f store.EventFilter) ([]models.PromptEvent, error) {
 	return m.events, nil
 }
-func (m *mockFullStore) ListEventIDs(ctx context.Context) ([]string, error) {
+func (m *mockFullStore) ListRecentEventIDs(ctx context.Context, since time.Time) ([]string, error) {
 	var ids []string
 	for _, e := range m.events {
 		ids = append(ids, e.ID)

@@ -67,7 +67,7 @@ func New(s store.Store, gapMinutes int) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.loadSummary()
+	return m.loadProjectsAndSummary()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -106,26 +106,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focus == panelLeft && m.selected > 0 {
 				m.selected--
 				m.loading = true
-				return m, m.loadSummary()
+				return m, m.loadSummaryOnly()
 			}
 
 		case "down", "j":
 			if m.focus == panelLeft && m.selected < len(m.projects)-1 {
 				m.selected++
 				m.loading = true
-				return m, m.loadSummary()
+				return m, m.loadSummaryOnly()
 			}
 
 		case "left", "h":
 			m.offset++
 			m.loading = true
-			return m, m.loadSummary()
+			return m, m.loadProjectsAndSummary()
 
 		case "right", "l":
 			if m.offset > 0 {
 				m.offset--
 				m.loading = true
-				return m, m.loadSummary()
+				return m, m.loadProjectsAndSummary()
 			}
 
 		case "m":
@@ -136,11 +136,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.offset = 0
 			m.loading = true
-			return m, m.loadSummary()
+			return m, m.loadProjectsAndSummary()
 
 		case "r":
 			m.loading = true
-			return m, m.loadSummary()
+			return m, m.loadProjectsAndSummary()
 		}
 	}
 
@@ -262,7 +262,66 @@ func (m Model) selectedProject() string {
 	return m.projects[m.selected].name
 }
 
-func (m Model) loadSummary() tea.Cmd {
+func (m Model) loadProjectsAndSummary() tea.Cmd {
+	return func() tea.Msg {
+		from, to := m.periodRange()
+		
+		allSummary, err := retro.Aggregate(
+			context.Background(), m.store,
+			from, to, "",
+			m.gapMinutes,
+		)
+		if err != nil {
+			return summaryMsg{err: err}
+		}
+		
+		var projects []projectEntry
+		projects = append(projects, projectEntry{name: "", prompts: allSummary.TotalPrompts})
+		for _, p := range allSummary.Projects {
+			projects = append(projects, projectEntry{name: p.Name, prompts: p.Prompts})
+		}
+		
+		// If the user had a selection, try to keep the same project name selected
+		selectedProject := ""
+		if m.selected < len(m.projects) {
+			selectedProject = m.projects[m.selected].name
+		}
+		
+		newSelectedIndex := 0
+		if selectedProject != "" {
+			for i, p := range projects {
+				if p.name == selectedProject {
+					newSelectedIndex = i
+					break
+				}
+			}
+		}
+		
+		// Now fetch the filtered summary
+		filterProject := ""
+		if newSelectedIndex > 0 {
+			filterProject = projects[newSelectedIndex].name
+		}
+		
+		var summary *retro.Summary
+		if filterProject == "" {
+			summary = allSummary
+		} else {
+			summary, err = retro.Aggregate(
+				context.Background(), m.store,
+				from, to, filterProject,
+				m.gapMinutes,
+			)
+			if err != nil {
+				return summaryMsg{err: err}
+			}
+		}
+
+		return summaryMsg{summary: summary, projects: projects}
+	}
+}
+
+func (m Model) loadSummaryOnly() tea.Cmd {
 	return func() tea.Msg {
 		from, to := m.periodRange()
 		project := m.selectedProject()
@@ -276,25 +335,7 @@ func (m Model) loadSummary() tea.Cmd {
 			return summaryMsg{err: err}
 		}
 
-		// Fetch all events without project filter to build the list.
-		// We rebuild this if we are selecting 'All' (index 0) or if projects is empty,
-		// but really we want to rebuild it whenever period changes.
-		// A cleaner way is just to always rebuild the project list when loading summary.
-		// To avoid losing selection, we'll keep the current selection index.
-		var projects []projectEntry
-		allSummary, err := retro.Aggregate(
-			context.Background(), m.store,
-			from, to, "",
-			m.gapMinutes,
-		)
-		if err == nil {
-			projects = append(projects, projectEntry{name: "", prompts: allSummary.TotalPrompts})
-			for _, p := range allSummary.Projects {
-				projects = append(projects, projectEntry{name: p.Name, prompts: p.Prompts})
-			}
-		}
-
-		return summaryMsg{summary: summary, projects: projects}
+		return summaryMsg{summary: summary, projects: nil}
 	}
 }
 

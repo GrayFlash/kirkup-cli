@@ -109,5 +109,6 @@ func runDashboard(_ *cobra.Command, _ []string) error {
 	fmt.Println("\ndashboard is starting up!")
 	fmt.Println("access it at: http://localhost:3000")
 	fmt.Println("\nnote: the first time you run this, it may take a minute to pull the image.")
+	fmt.Println("note: Metabase is a JVM application and requires ~500MB-1GB of RAM to run smoothly.")
 	return nil
 }

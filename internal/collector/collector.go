@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-
 	"github.com/fsnotify/fsnotify"
 
 	"github.com/GrayFlash/kirkup-cli/agent"
@@ -37,6 +36,7 @@ type Collector struct {
 	statsNew       int
 
 	redactionPatterns []*regexp.Regexp
+	fileState         map[string]time.Time
 }
 
 // New creates a Collector. Call Start to begin watching.
@@ -51,6 +51,7 @@ func New(agents *agent.Registry, s store.Store, cfg *config.Config, log *slog.Lo
 		log:          log,
 		seen:         make(map[string]struct{}),
 		seenProjects: make(map[string]struct{}),
+		fileState:    make(map[string]time.Time),
 		done:         make(chan struct{}),
 	}
 
@@ -58,13 +59,13 @@ func New(agents *agent.Registry, s store.Store, cfg *config.Config, log *slog.Lo
 		patterns := cfg.Privacy.Patterns
 		if len(patterns) == 0 {
 			patterns = []string{
-				`sk-[a-zA-Z0-9]{48}`,                        // OpenAI
-				`ghp_[a-zA-Z0-9]{36}`,                       // GitHub
-				`xoxb-[0-9]{11,13}-[a-zA-Z0-9]{24}`,         // Slack
-				`AKIA[0-9A-Z]{16}`,                          // AWS
-				`sk-ant-api03-[a-zA-Z0-9\-_]{93}`,           // Anthropic
-				`AIza[0-9A-Za-z\-_]{35}`,                    // Google Cloud
-				`Bearer\s+[a-zA-Z0-9\-\._~\+\/]+=*`,         // Generic Bearer
+				`sk-[a-zA-Z0-9]{48}`,                // OpenAI
+				`ghp_[a-zA-Z0-9]{36}`,               // GitHub
+				`xoxb-[0-9]{11,13}-[a-zA-Z0-9]{24}`, // Slack
+				`AKIA[0-9A-Z]{16}`,                  // AWS
+				`sk-ant-api03-[a-zA-Z0-9\-_]{93}`,   // Anthropic
+				`AIza[0-9A-Za-z\-_]{35}`,            // Google Cloud
+				`Bearer\s+[a-zA-Z0-9\-\._~\+\/]+=*`, // Generic Bearer
 				`eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+`, // JWT
 			}
 		}
@@ -152,7 +153,9 @@ func (c *Collector) Stop() {
 
 // LoadSeen populates the in-memory deduplication map from the store.
 func (c *Collector) LoadSeen(ctx context.Context) error {
-	ids, err := c.store.ListEventIDs(ctx)
+	// Only load IDs from the last 90 days.
+	since := time.Now().Add(-90 * 24 * time.Hour)
+	ids, err := c.store.ListRecentEventIDs(ctx, since)
 	if err != nil {
 		return fmt.Errorf("list event ids: %w", err)
 	}
@@ -213,11 +216,28 @@ func (c *Collector) processMatchingFile(ctx context.Context, path string, globs 
 // processFile reads all events from path via the adapter, enriches them, and
 // stores any that have not been seen before.
 func (c *Collector) processFile(ctx context.Context, a agent.Adapter, path string) {
+	// Skip if the file hasn't been modified since we last read it
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	c.mu.Lock()
+	lastMod, known := c.fileState[path]
+	c.mu.Unlock()
+
+	if known && !info.ModTime().After(lastMod) {
+		return
+	}
+
 	events, err := a.Events(ctx, path)
 	if err != nil {
 		c.log.Debug("parse error", "agent", a.Name(), "path", path, "err", err)
 		return
 	}
+
+	c.mu.Lock()
+	c.fileState[path] = info.ModTime()
+	c.mu.Unlock()
 
 	for i := range events {
 		e := &events[i]
@@ -389,7 +409,6 @@ func truncate(s string, n int) string {
 	}
 	return s[:n] + "…"
 }
-
 
 func (c *Collector) redact(prompt string) string {
 	if len(c.redactionPatterns) == 0 {

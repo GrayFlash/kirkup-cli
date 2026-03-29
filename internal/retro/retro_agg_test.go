@@ -17,7 +17,7 @@ func (m *mockStore) QueryPromptEvents(ctx context.Context, f store.EventFilter) 
 	return m.events, nil
 }
 
-func (m *mockStore) ListEventIDs(ctx context.Context) ([]string, error) {
+func (m *mockStore) ListRecentEventIDs(ctx context.Context, since time.Time) ([]string, error) {
 	var ids []string
 	for _, e := range m.events {
 		ids = append(ids, e.ID)
