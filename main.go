@@ -6,10 +6,17 @@ import (
 	"github.com/GrayFlash/kirkup-cli/cmd"
 )
 
-//go:embed configs/default.yaml
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
+//go:embed config/defaults/default.yaml
 var defaultConfig []byte
 
 func main() {
 	cmd.DefaultConfig = defaultConfig
+	cmd.Version = version + " (" + commit + ") " + date
 	cmd.Execute()
 }

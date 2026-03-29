@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/GrayFlash/kirkup-cli/retro"
+	"github.com/GrayFlash/kirkup-cli/internal/retro"
 	"github.com/GrayFlash/kirkup-cli/store"
 )
 
@@ -67,7 +67,7 @@ func New(s store.Store, gapMinutes int) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.loadSummary()
+	return m.loadProjectsAndSummary()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -84,6 +84,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.summary = msg.summary
 		if msg.projects != nil {
 			m.projects = msg.projects
+			if m.selected >= len(m.projects) {
+				m.selected = 0
+			}
 		}
 		return m, nil
 
@@ -103,26 +106,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focus == panelLeft && m.selected > 0 {
 				m.selected--
 				m.loading = true
-				return m, m.loadSummary()
+				return m, m.loadSummaryOnly()
 			}
 
 		case "down", "j":
 			if m.focus == panelLeft && m.selected < len(m.projects)-1 {
 				m.selected++
 				m.loading = true
-				return m, m.loadSummary()
+				return m, m.loadSummaryOnly()
 			}
 
 		case "left", "h":
 			m.offset++
 			m.loading = true
-			return m, m.loadSummary()
+			return m, m.loadProjectsAndSummary()
 
 		case "right", "l":
 			if m.offset > 0 {
 				m.offset--
 				m.loading = true
-				return m, m.loadSummary()
+				return m, m.loadProjectsAndSummary()
 			}
 
 		case "m":
@@ -133,11 +136,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.offset = 0
 			m.loading = true
-			return m, m.loadSummary()
+			return m, m.loadProjectsAndSummary()
 
 		case "r":
 			m.loading = true
-			return m, m.loadSummary()
+			return m, m.loadProjectsAndSummary()
 		}
 	}
 
@@ -157,9 +160,18 @@ func (m Model) View() string {
 	footerH := lipgloss.Height(footer)
 	helpH := lipgloss.Height(help)
 	bodyH := m.height - headerH - footerH - helpH
+	if bodyH < 0 {
+		bodyH = 0
+	}
 
 	leftW := 28
+	if leftW > m.width {
+		leftW = m.width
+	}
 	rightW := m.width - leftW - 1
+	if rightW < 0 {
+		rightW = 0
+	}
 
 	left := renderLeft(m.projects, m.selected, m.focus == panelLeft, leftW, bodyH)
 	right := renderRight(m.summary, m.focus == panelRight, rightW, bodyH)
@@ -253,7 +265,66 @@ func (m Model) selectedProject() string {
 	return m.projects[m.selected].name
 }
 
-func (m Model) loadSummary() tea.Cmd {
+func (m Model) loadProjectsAndSummary() tea.Cmd {
+	return func() tea.Msg {
+		from, to := m.periodRange()
+
+		allSummary, err := retro.Aggregate(
+			context.Background(), m.store,
+			from, to, "",
+			m.gapMinutes,
+		)
+		if err != nil {
+			return summaryMsg{err: err}
+		}
+
+		var projects []projectEntry
+		projects = append(projects, projectEntry{name: "", prompts: allSummary.TotalPrompts})
+		for _, p := range allSummary.Projects {
+			projects = append(projects, projectEntry{name: p.Name, prompts: p.Prompts})
+		}
+
+		// If the user had a selection, try to keep the same project name selected
+		selectedProject := ""
+		if m.selected < len(m.projects) {
+			selectedProject = m.projects[m.selected].name
+		}
+
+		newSelectedIndex := 0
+		if selectedProject != "" {
+			for i, p := range projects {
+				if p.name == selectedProject {
+					newSelectedIndex = i
+					break
+				}
+			}
+		}
+
+		// Now fetch the filtered summary
+		filterProject := ""
+		if newSelectedIndex > 0 {
+			filterProject = projects[newSelectedIndex].name
+		}
+
+		var summary *retro.Summary
+		if filterProject == "" {
+			summary = allSummary
+		} else {
+			summary, err = retro.Aggregate(
+				context.Background(), m.store,
+				from, to, filterProject,
+				m.gapMinutes,
+			)
+			if err != nil {
+				return summaryMsg{err: err}
+			}
+		}
+
+		return summaryMsg{summary: summary, projects: projects}
+	}
+}
+
+func (m Model) loadSummaryOnly() tea.Cmd {
 	return func() tea.Msg {
 		from, to := m.periodRange()
 		project := m.selectedProject()
@@ -267,36 +338,11 @@ func (m Model) loadSummary() tea.Cmd {
 			return summaryMsg{err: err}
 		}
 
-		// Build project list only on first load (selected == 0 and no projects yet).
-		var projects []projectEntry
-		if len(m.projects) == 0 {
-			// Fetch all events without project filter to build the list.
-			allSummary, err := retro.Aggregate(
-				context.Background(), m.store,
-				from, to, "",
-				m.gapMinutes,
-			)
-			if err == nil {
-				projects = append(projects, projectEntry{name: "", prompts: allSummary.TotalPrompts})
-				for _, p := range allSummary.Projects {
-					projects = append(projects, projectEntry{name: p.Name, prompts: p.Prompts})
-				}
-			}
-		}
-
-		return summaryMsg{summary: summary, projects: projects}
+		return summaryMsg{summary: summary, projects: nil}
 	}
 }
 
 func truncDay(t time.Time) time.Time {
 	y, m, d := t.Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
-}
-
-func fmtDuration(d time.Duration) string {
-	h := d.Hours()
-	if h >= 1 {
-		return fmt.Sprintf("~%.1fh", h)
-	}
-	return fmt.Sprintf("~%.0fm", d.Minutes())
 }

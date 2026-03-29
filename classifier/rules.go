@@ -2,8 +2,10 @@ package classifier
 
 import (
 	"context"
+	"log"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/GrayFlash/kirkup-cli/models"
@@ -20,6 +22,7 @@ type Rule struct {
 
 // RuleClassifier classifies prompt events using keyword and regex rules.
 type RuleClassifier struct {
+	mu    sync.RWMutex
 	rules []Rule
 }
 
@@ -38,6 +41,8 @@ func (rc *RuleClassifier) Name() string { return "rules-v1" }
 // AddRule appends a custom rule. Higher priority rules are checked first.
 func (rc *RuleClassifier) AddRule(category string, keywords []string, patterns []string, priority int) {
 	r := rawRule{category, keywords, patterns, priority}
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 	rc.rules = append(rc.rules, compileRule(r))
 	// Keep rules sorted by priority descending.
 	sortRules(rc.rules)
@@ -67,6 +72,8 @@ func (rc *RuleClassifier) Classify(_ context.Context, events []models.PromptEven
 // classify returns the category for a single prompt text.
 func (rc *RuleClassifier) classify(prompt string) (string, bool) {
 	lower := strings.ToLower(prompt)
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
 	for _, r := range rc.rules {
 		if matchesRule(r, lower) {
 			return r.Category, true
@@ -102,16 +109,19 @@ var defaultRules = []rawRule{
 	{
 		Category: "debugging",
 		Keywords: []string{"debug", "fix bug", "why is", "why does", "not working", "broken", "failing", "error", "exception", "crash", "panic", "stacktrace", "traceback"},
+		Patterns: []string{`(?i)fix.*bug`, `(?i)fix.*error`, `(?i)why is.*failing`},
 		Priority: 10,
 	},
 	{
 		Category: "testing",
 		Keywords: []string{"test", "spec", "assert", "coverage", "mock", "stub", "fixture", "benchmark"},
+		Patterns: []string{`(?i)write.*test`, `(?i)add.*test`},
 		Priority: 9,
 	},
 	{
 		Category: "refactoring",
 		Keywords: []string{"refactor", "extract", "rename", "restructure", "clean up", "cleanup", "reorganize", "simplify", "decouple", "move"},
+		Patterns: []string{`(?i)refactor.*to`, `(?i)extract.*method`},
 		Priority: 8,
 	},
 	{
@@ -122,22 +132,22 @@ var defaultRules = []rawRule{
 	{
 		Category: "infra",
 		Keywords: []string{"docker", "dockerfile", "ci", "cd", "pipeline", "deploy", "kubernetes", "k8s", "nginx", "terraform", "ansible", "github action", "workflow"},
-		Priority: 7,
+		Priority: 6,
 	},
 	{
 		Category: "spec-reading",
 		Keywords: []string{"explain", "what is", "what does", "how does", "what are", "describe", "understand", "clarify", "definition of"},
-		Priority: 6,
+		Priority: 5,
 	},
 	{
 		Category: "documentation",
 		Keywords: []string{"readme", "godoc", "jsdoc", "docstring", "write doc", "document", "add comment", "add comments"},
-		Priority: 6,
+		Priority: 4,
 	},
 	{
 		Category: "exploration",
 		Keywords: []string{"spike", "prototype", "explore", "experiment", "try out", "research", "investigate", "how to"},
-		Priority: 5,
+		Priority: 3,
 	},
 	{
 		Category: "coding",
@@ -149,12 +159,16 @@ var defaultRules = []rawRule{
 func compileRule(r rawRule) Rule {
 	compiled := Rule{
 		Category: r.Category,
-		Keywords: r.Keywords,
 		Priority: r.Priority,
+	}
+	for _, kw := range r.Keywords {
+		compiled.Keywords = append(compiled.Keywords, strings.ToLower(kw))
 	}
 	for _, p := range r.Patterns {
 		if re, err := regexp.Compile(p); err == nil {
 			compiled.Patterns = append(compiled.Patterns, re)
+		} else {
+			log.Printf("warning: invalid regex pattern %q in category %q: %v\n", p, r.Category, err)
 		}
 	}
 	return compiled

@@ -8,11 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/GrayFlash/kirkup-cli/agent"
-	agentclaude "github.com/GrayFlash/kirkup-cli/agent/claude"
-	agentcursor "github.com/GrayFlash/kirkup-cli/agent/cursor"
-	agentgemini "github.com/GrayFlash/kirkup-cli/agent/gemini"
-	"github.com/GrayFlash/kirkup-cli/collector"
+	"github.com/GrayFlash/kirkup-cli/internal/collector"
 )
 
 var serveCmd = &cobra.Command{
@@ -27,22 +23,13 @@ func init() {
 }
 
 func runServe(_ *cobra.Command, _ []string) error {
-	cfg, err := loadConfig()
+	cfg, s, cleanup, err := openApp()
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
-	s, err := openStore(cfg)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = s.Close() }()
-
-	registry := agent.NewRegistry(
-		agentgemini.New(),
-		agentcursor.New(),
-		agentclaude.New(),
-	)
+	registry := newAgentRegistry(cfg)
 
 	level := slog.LevelInfo
 	if cfg.Daemon.LogLevel == "debug" {

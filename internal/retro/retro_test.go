@@ -123,17 +123,17 @@ func TestBar_HalfPercent(t *testing.T) {
 	}
 }
 
-// -- fmtDuration --
+// -- FmtDuration --
 
 func TestFmtDuration_Hours(t *testing.T) {
-	got := fmtDuration(90 * time.Minute)
+	got := FmtDuration(90 * time.Minute)
 	if got != "~1.5h" {
 		t.Errorf("want ~1.5h, got %q", got)
 	}
 }
 
 func TestFmtDuration_Minutes(t *testing.T) {
-	got := fmtDuration(25 * time.Minute)
+	got := FmtDuration(25 * time.Minute)
 	if got != "~25m" {
 		t.Errorf("want ~25m, got %q", got)
 	}

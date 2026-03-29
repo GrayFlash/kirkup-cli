@@ -9,3 +9,9 @@ type Project struct {
 	Paths       []string
 	CreatedAt   time.Time
 }
+
+type ProjectStat struct {
+	Name     string
+	Prompts  int
+	LastSeen time.Time
+}

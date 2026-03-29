@@ -25,12 +25,17 @@ func runStop(_ *cobra.Command, _ []string) error {
 
 	pid, err := readPID(pidPath)
 	if err != nil {
-		return fmt.Errorf("kirkup is not running")
+		if os.IsNotExist(err) {
+			fmt.Println("kirkup is not running")
+			return nil
+		}
+		return fmt.Errorf("read pid file: %w", err)
 	}
 
 	if !isRunning(pid) {
 		_ = os.Remove(pidPath)
-		return fmt.Errorf("kirkup is not running (stale pid file removed)")
+		fmt.Println("kirkup is not running (stale pid file removed)")
+		return nil
 	}
 
 	if err := stopProcess(pid); err != nil {

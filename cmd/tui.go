@@ -4,7 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	"github.com/GrayFlash/kirkup-cli/tui"
+	"github.com/GrayFlash/kirkup-cli/internal/tui"
 )
 
 var tuiCmd = &cobra.Command{
@@ -18,15 +18,11 @@ func init() {
 }
 
 func runTUI(_ *cobra.Command, _ []string) error {
-	cfg, err := loadConfig()
+	cfg, s, cleanup, err := openApp()
 	if err != nil {
 		return err
 	}
-	s, err := openStore(cfg)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = s.Close() }()
+	defer cleanup()
 
 	m := tui.New(s, cfg.Sessions.GapThresholdMinutes)
 	_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()

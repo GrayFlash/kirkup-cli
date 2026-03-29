@@ -1,4 +1,4 @@
-package collector
+package context
 
 import (
 	"testing"
@@ -34,7 +34,7 @@ func TestResolveProject_ByGitRemote(t *testing.T) {
 
 func TestResolveProject_ByGitRemoteNormalisedSSH(t *testing.T) {
 	// SSH remote should normalise to match the config value
-	got := ResolveProject(testProjects, "github.com/example/project-beta", "")
+	got := ResolveProject(testProjects, "git@github.com:example/project-beta.git", "")
 	if got != "project-beta" {
 		t.Errorf("want project-beta, got %q", got)
 	}

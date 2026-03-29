@@ -1,8 +1,10 @@
-package collector
+package context
 
 import (
+	"context"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // GitInfo holds the git context resolved from a working directory.
@@ -25,7 +27,11 @@ func GitContext(dir string) GitInfo {
 }
 
 func gitRemote(dir string) string {
-	out, err := exec.Command("git", "-C", dir, "remote", "get-url", "origin").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "remote", "get-url", "origin")
+	cmd.WaitDelay = 100 * time.Millisecond
+	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}
@@ -34,7 +40,11 @@ func gitRemote(dir string) string {
 }
 
 func gitBranch(dir string) string {
-	out, err := exec.Command("git", "-C", dir, "branch", "--show-current").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "branch", "--show-current")
+	cmd.WaitDelay = 100 * time.Millisecond
+	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}

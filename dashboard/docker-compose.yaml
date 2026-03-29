@@ -1,0 +1,14 @@
+version: "3.7"
+
+services:
+  metabase:
+    image: metabase/metabase:latest
+    container_name: kirkup-dashboard
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./metabase-data:/metabase-data
+      - ${HOME}/.kirkup/kirkup.db:/data/kirkup.db:ro
+    environment:
+      - MB_DB_FILE=/metabase-data/metabase.db
+    restart: unless-stopped

@@ -11,6 +11,7 @@ type Store interface {
 	// Prompt events
 	InsertPromptEvent(ctx context.Context, e *models.PromptEvent) error
 	QueryPromptEvents(ctx context.Context, f EventFilter) ([]models.PromptEvent, error)
+	ListRecentEventIDs(ctx context.Context, since time.Time) ([]string, error)
 
 	// Classifications
 	InsertClassification(ctx context.Context, c *models.Classification) error
@@ -24,6 +25,7 @@ type Store interface {
 	// Projects
 	UpsertProject(ctx context.Context, p *models.Project) error
 	ListProjects(ctx context.Context) ([]models.Project, error)
+	ProjectStats(ctx context.Context) ([]models.ProjectStat, error)
 
 	// Lifecycle
 	Migrate(ctx context.Context) error

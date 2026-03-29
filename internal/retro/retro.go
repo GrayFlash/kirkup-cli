@@ -177,12 +177,13 @@ func Aggregate(ctx context.Context, s store.Store, from, to time.Time, project s
 }
 
 // inferSessions groups events into sessions by (project, agent) with a gap
+// inferSessions groups events into sessions separated by more than the gap
 // threshold. Events are sorted by timestamp within each group.
 func inferSessions(events []models.PromptEvent, gapMinutes int) []models.Session {
-	type key struct{ project, agent string }
+	type key struct{ project, agent, branch string }
 	groups := make(map[key][]models.PromptEvent)
 	for _, e := range events {
-		k := key{e.Project, e.Agent}
+		k := key{e.Project, e.Agent, e.GitBranch}
 		groups[k] = append(groups[k], e)
 	}
 
@@ -200,11 +201,18 @@ func inferSessions(events []models.PromptEvent, gapMinutes int) []models.Session
 
 		for _, e := range group[1:] {
 			if e.Timestamp.Sub(prev) > gap {
+				// End current session
+				ended := prev
+				// If session is very short, assume at least 5 mins of work.
+				if ended.Sub(start) < 5*time.Minute {
+					ended = start.Add(5 * time.Minute)
+				}
+
 				sessions = append(sessions, models.Session{
 					Project:             k.project,
 					Agent:               k.agent,
 					StartedAt:           start,
-					EndedAt:             prev,
+					EndedAt:             ended,
 					PromptCount:         count,
 					GapThresholdMinutes: gapMinutes,
 				})
@@ -214,11 +222,17 @@ func inferSessions(events []models.PromptEvent, gapMinutes int) []models.Session
 			prev = e.Timestamp
 			count++
 		}
+
+		// Final session
+		ended := prev
+		if ended.Sub(start) < 5*time.Minute {
+			ended = start.Add(5 * time.Minute)
+		}
 		sessions = append(sessions, models.Session{
 			Project:             k.project,
 			Agent:               k.agent,
 			StartedAt:           start,
-			EndedAt:             prev,
+			EndedAt:             ended,
 			PromptCount:         count,
 			GapThresholdMinutes: gapMinutes,
 		})
@@ -239,20 +253,17 @@ func dailyStats(events []models.PromptEvent, from, to time.Time) []DayStat {
 		return time.Date(y, m, d, 0, 0, 0, 0, time.Local)
 	}
 
-	// Sort events by timestamp ascending.
-	sorted := make([]models.PromptEvent, len(events))
-	copy(sorted, events)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Timestamp.Before(sorted[j].Timestamp)
-	})
-
 	type dayData struct {
 		date   time.Time
 		count  int
 		events []models.PromptEvent
 	}
 	days := make(map[dayKey]*dayData)
-	for _, e := range sorted {
+
+	// The DB returns events in DESC order (newest first).
+	// Iterate backwards to process chronologically without copying/sorting the whole slice.
+	for i := len(events) - 1; i >= 0; i-- {
+		e := events[i]
 		k := dayOf(e.Timestamp)
 		if days[k] == nil {
 			days[k] = &dayData{date: dateOf(e.Timestamp)}
@@ -263,7 +274,8 @@ func dailyStats(events []models.PromptEvent, from, to time.Time) []DayStat {
 
 	// Enumerate each day in the range.
 	var stats []DayStat
-	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
+	startDay := dateOf(from)
+	for d := startDay; !d.After(to); d = d.AddDate(0, 0, 1) {
 		k := dayKey(d.Local().Format("2006-01-02"))
 		data := days[k]
 		if data == nil {

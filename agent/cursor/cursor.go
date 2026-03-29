@@ -67,21 +67,21 @@ type providerOpts struct {
 	} `json:"cursor"`
 }
 
-func (a *Adapter) Events(_ context.Context, path string) ([]models.PromptEvent, error) {
+func (a *Adapter) Events(ctx context.Context, path string) ([]models.PromptEvent, error) {
 	db, err := sql.Open("sqlite", path+"?mode=ro")
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = db.Close() }()
 
-	meta, err := readChatMeta(db)
+	meta, err := readChatMeta(ctx, db)
 	if err != nil {
 		return nil, err
 	}
 
 	cwd := resolveWorkspace(path)
 
-	rows, err := db.Query("SELECT data FROM blobs")
+	rows, err := db.QueryContext(ctx, "SELECT data FROM blobs")
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +89,11 @@ func (a *Adapter) Events(_ context.Context, path string) ([]models.PromptEvent, 
 
 	var events []models.PromptEvent
 	for rows.Next() {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
 		var data []byte
 		if err := rows.Scan(&data); err != nil {
 			continue
@@ -133,12 +138,15 @@ func (a *Adapter) Events(_ context.Context, path string) ([]models.PromptEvent, 
 			RawSource:  sessionID,
 		})
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return events, nil
 }
 
-func readChatMeta(db *sql.DB) (chatMeta, error) {
+func readChatMeta(ctx context.Context, db *sql.DB) (chatMeta, error) {
 	var raw []byte
-	if err := db.QueryRow("SELECT value FROM meta WHERE key = '0'").Scan(&raw); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT value FROM meta WHERE key = '0'").Scan(&raw); err != nil {
 		return chatMeta{}, err
 	}
 
