@@ -58,9 +58,14 @@ func New(agents *agent.Registry, s store.Store, cfg *config.Config, log *slog.Lo
 		patterns := cfg.Privacy.Patterns
 		if len(patterns) == 0 {
 			patterns = []string{
-				`sk-[a-zA-Z0-9]{48}`,                // OpenAI
-				`ghp_[a-zA-Z0-9]{36}`,               // GitHub
-				`xoxb-[0-9]{11,13}-[a-zA-Z0-9]{24}`, // Slack
+				`sk-[a-zA-Z0-9]{48}`,                        // OpenAI
+				`ghp_[a-zA-Z0-9]{36}`,                       // GitHub
+				`xoxb-[0-9]{11,13}-[a-zA-Z0-9]{24}`,         // Slack
+				`AKIA[0-9A-Z]{16}`,                          // AWS
+				`sk-ant-api03-[a-zA-Z0-9\-_]{93}`,           // Anthropic
+				`AIza[0-9A-Za-z\-_]{35}`,                    // Google Cloud
+				`Bearer\s+[a-zA-Z0-9\-\._~\+\/]+=*`,         // Generic Bearer
+				`eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+`, // JWT
 			}
 		}
 		for _, p := range patterns {

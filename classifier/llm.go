@@ -34,6 +34,8 @@ func (c *LLMClassifier) Name() string {
 }
 
 func (c *LLMClassifier) Classify(ctx context.Context, events []models.PromptEvent) ([]models.Classification, error) {
+	fmt.Println("warning: LLM classification sends full prompt text to the configured provider.")
+	
 	var results []models.Classification
 
 	// Process in batches
@@ -83,6 +85,9 @@ func (c *LLMClassifier) classifyBatch(ctx context.Context, batch []models.Prompt
 func (c *LLMClassifier) callOpenAI(ctx context.Context, prompt string) (string, error) {
 	url := "https://api.openai.com/v1/chat/completions"
 	if c.cfg.Endpoint != "" {
+		if strings.HasPrefix(c.cfg.Endpoint, "http://") && !strings.Contains(c.cfg.Endpoint, "localhost") && !strings.Contains(c.cfg.Endpoint, "127.0.0.1") {
+			fmt.Printf("warning: using cleartext HTTP for OpenAI endpoint %q may leak your API key\n", c.cfg.Endpoint)
+		}
 		url = c.cfg.Endpoint
 	}
 
@@ -139,6 +144,9 @@ func (c *LLMClassifier) callOpenAI(ctx context.Context, prompt string) (string, 
 func (c *LLMClassifier) callAnthropic(ctx context.Context, prompt string) (string, error) {
 	url := "https://api.anthropic.com/v1/messages"
 	if c.cfg.Endpoint != "" {
+		if strings.HasPrefix(c.cfg.Endpoint, "http://") && !strings.Contains(c.cfg.Endpoint, "localhost") && !strings.Contains(c.cfg.Endpoint, "127.0.0.1") {
+			fmt.Printf("warning: using cleartext HTTP for Anthropic endpoint %q may leak your API key\n", c.cfg.Endpoint)
+		}
 		url = c.cfg.Endpoint
 	}
 

@@ -6,7 +6,7 @@ store:
   sqlite:
     path: ~/.kirkup/kirkup.db
   postgres:
-    dsn: "host=localhost port=5432 user=postgres password=postgres dbname=kirkup sslmode=disable"
+    dsn: "host=your-db-host port=5432 user=kirkup password=your-secure-password dbname=kirkup sslmode=require"
 
 # Agent log sources — kirkup auto-detects installed agents.
 # Override log paths or add generic agents here.

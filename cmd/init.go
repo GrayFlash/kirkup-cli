@@ -80,10 +80,10 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 // writeDefaultConfig writes data to dst, creating parent dirs as needed.
 func writeDefaultConfig(dst string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(dst, data, 0o644)
+	return os.WriteFile(dst, data, 0o600)
 }
 
 func defaultConfigBytes() []byte {

@@ -8,10 +8,10 @@ import (
 )
 
 func writePID(path string, pid int) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(strconv.Itoa(pid)), 0o644)
+	return os.WriteFile(path, []byte(strconv.Itoa(pid)), 0o600)
 }
 
 func readPID(path string) (int, error) {

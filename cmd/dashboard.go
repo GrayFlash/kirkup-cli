@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var dashboardCmd = &cobra.Command{
@@ -21,13 +22,27 @@ func init() {
 	rootCmd.AddCommand(dashboardCmd)
 }
 
+type composeService struct {
+	Image         string            `yaml:"image"`
+	ContainerName string            `yaml:"container_name"`
+	Ports         []string          `yaml:"ports"`
+	Volumes       []string          `yaml:"volumes"`
+	Environment   map[string]string `yaml:"environment"`
+	Restart       string            `yaml:"restart"`
+}
+
+type composeRoot struct {
+	Version  string                    `yaml:"version"`
+	Services map[string]composeService `yaml:"services"`
+}
+
 func runDashboard(_ *cobra.Command, _ []string) error {
 	dir, err := kirkupDir()
 	if err != nil {
 		return err
 	}
 	dashDir := filepath.Join(dir, "dashboard")
-	if err := os.MkdirAll(dashDir, 0o755); err != nil {
+	if err := os.MkdirAll(dashDir, 0o700); err != nil {
 		return err
 	}
 
@@ -37,7 +52,24 @@ func runDashboard(_ *cobra.Command, _ []string) error {
 	}
 
 	composePath := filepath.Join(dashDir, "docker-compose.yaml")
-	var composeContent string
+
+	root := composeRoot{
+		Version: "3.7",
+		Services: map[string]composeService{
+			"metabase": {
+				Image:         "metabase/metabase:latest",
+				ContainerName: "kirkup-dashboard",
+				Ports:         []string{"3000:3000"},
+				Volumes:       []string{"./metabase-data:/metabase-data"},
+				Environment: map[string]string{
+					"MB_DB_FILE": "/metabase-data/metabase.db",
+				},
+				Restart: "unless-stopped",
+			},
+		},
+	}
+
+	svc := root.Services["metabase"]
 
 	switch cfg.Store.Driver {
 	case "sqlite":
@@ -45,15 +77,25 @@ func runDashboard(_ *cobra.Command, _ []string) error {
 		if !filepath.IsAbs(sqlitePath) {
 			sqlitePath = filepath.Join(dir, sqlitePath)
 		}
-		composeContent = fmt.Sprintf(dashboardComposeSQLite, sqlitePath)
+		svc.Volumes = append(svc.Volumes, fmt.Sprintf("%s:/data/kirkup.db:ro", sqlitePath))
+		svc.Environment["MB_DB_TYPE"] = "sqlite"
+		svc.Environment["MB_DB_DBNAME"] = "/data/kirkup.db"
 	case "postgres":
-		composeContent = fmt.Sprintf(dashboardComposePostgres, cfg.Store.PG.DSN)
+		svc.Environment["MB_DB_TYPE"] = "postgres"
+		svc.Environment["MB_DB_CONNECTION_URI"] = cfg.Store.PG.DSN
 	default:
 		return fmt.Errorf("unsupported store driver for dashboard: %q", cfg.Store.Driver)
 	}
 
+	root.Services["metabase"] = svc
+
+	composeContent, err := yaml.Marshal(root)
+	if err != nil {
+		return fmt.Errorf("marshal compose config: %w", err)
+	}
+
 	fmt.Println("launching dashboard via docker-compose...")
-	if err := os.WriteFile(composePath, []byte(composeContent), 0o600); err != nil {
+	if err := os.WriteFile(composePath, composeContent, 0o600); err != nil {
 		return err
 	}
 
@@ -69,38 +111,3 @@ func runDashboard(_ *cobra.Command, _ []string) error {
 	fmt.Println("\nnote: the first time you run this, it may take a minute to pull the image.")
 	return nil
 }
-
-const dashboardComposeSQLite = `version: "3.7"
-
-services:
-  metabase:
-    image: metabase/metabase:latest
-    container_name: kirkup-dashboard
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./metabase-data:/metabase-data
-      - %s:/data/kirkup.db:ro
-    environment:
-      - MB_DB_FILE=/metabase-data/metabase.db
-      - MB_DB_TYPE=sqlite
-      - MB_DB_DBNAME=/data/kirkup.db
-    restart: unless-stopped
-`
-
-const dashboardComposePostgres = `version: "3.7"
-
-services:
-  metabase:
-    image: metabase/metabase:latest
-    container_name: kirkup-dashboard
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./metabase-data:/metabase-data
-    environment:
-      - MB_DB_FILE=/metabase-data/metabase.db
-      - MB_DB_TYPE=postgres
-      - MB_DB_CONNECTION_URI=%s
-    restart: unless-stopped
-`

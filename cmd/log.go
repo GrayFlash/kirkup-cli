@@ -48,11 +48,22 @@ func runLog(_ *cobra.Command, args []string) error {
 	if cfg.Privacy.Redact {
 		patterns := cfg.Privacy.Patterns
 		if len(patterns) == 0 {
-			patterns = []string{`sk-[a-zA-Z0-9]{48}`, `ghp_[a-zA-Z0-9]{36}`, `xoxb-[0-9]{11,13}-[a-zA-Z0-9]{24}`}
+			patterns = []string{
+				`sk-[a-zA-Z0-9]{48}`,
+				`ghp_[a-zA-Z0-9]{36}`,
+				`xoxb-[0-9]{11,13}-[a-zA-Z0-9]{24}`,
+				`AKIA[0-9A-Z]{16}`,
+				`sk-ant-api03-[a-zA-Z0-9\-_]{93}`,
+				`AIza[0-9A-Za-z\-_]{35}`,
+				`Bearer\s+[a-zA-Z0-9\-\._~\+\/]+=*`,
+				`eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+`,
+			}
 		}
 		for _, p := range patterns {
 			if re, err := regexp.Compile(p); err == nil {
 				description = re.ReplaceAllString(description, "[REDACTED]")
+			} else {
+				fmt.Printf("warning: invalid privacy redaction pattern %q: %v\n", p, err)
 			}
 		}
 	}

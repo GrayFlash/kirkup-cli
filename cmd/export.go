@@ -18,6 +18,7 @@ var (
 	exportTo      string
 	exportProject string
 	exportFormat  string
+	exportRedact  bool
 )
 
 var exportCmd = &cobra.Command{
@@ -31,6 +32,7 @@ func init() {
 	exportCmd.Flags().StringVar(&exportTo, "to", "", "End date (YYYY-MM-DD)")
 	exportCmd.Flags().StringVar(&exportProject, "project", "", "Filter by project")
 	exportCmd.Flags().StringVar(&exportFormat, "format", "json", "Output format: json or csv")
+	exportCmd.Flags().BoolVar(&exportRedact, "redact", false, "Redact prompts in the export output")
 	rootCmd.AddCommand(exportCmd)
 }
 
@@ -57,6 +59,12 @@ func runExport(_ *cobra.Command, _ []string) error {
 	events, err := s.QueryPromptEvents(context.Background(), f)
 	if err != nil {
 		return fmt.Errorf("query events: %w", err)
+	}
+
+	if exportRedact {
+		for i := range events {
+			events[i].Prompt = "[REDACTED]"
+		}
 	}
 
 	switch exportFormat {
