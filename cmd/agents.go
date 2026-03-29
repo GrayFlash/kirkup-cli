@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-
 )
 
 var agentsCmd = &cobra.Command{

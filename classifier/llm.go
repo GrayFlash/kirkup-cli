@@ -35,7 +35,7 @@ func (c *LLMClassifier) Name() string {
 
 func (c *LLMClassifier) Classify(ctx context.Context, events []models.PromptEvent) ([]models.Classification, error) {
 	fmt.Println("warning: LLM classification sends full prompt text to the configured provider.")
-	
+
 	var results []models.Classification
 
 	// Process in batches
@@ -224,14 +224,14 @@ func (c *LLMClassifier) buildPrompt(batch []models.PromptEvent) string {
 
 func (c *LLMClassifier) callOllama(ctx context.Context, prompt string) (string, error) {
 	url := fmt.Sprintf("%s/api/generate", c.cfg.Endpoint)
-	
+
 	body := map[string]any{
 		"model":  c.cfg.Model,
 		"prompt": prompt,
 		"stream": false,
 		"format": "json",
 	}
-	
+
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		return "", fmt.Errorf("marshal request: %w", err)
@@ -240,26 +240,26 @@ func (c *LLMClassifier) callOllama(ctx context.Context, prompt string) (string, 
 	if err != nil {
 		return "", err
 	}
-	
+
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("ollama error (status %d): %s", resp.StatusCode, string(data))
 	}
-	
+
 	var res struct {
 		Response string `json:"response"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 		return "", err
 	}
-	
+
 	return res.Response, nil
 }
 
@@ -268,7 +268,7 @@ func (c *LLMClassifier) parseResponse(batch []models.PromptEvent, response strin
 		Category   string  `json:"category"`
 		Confidence float64 `json:"confidence"`
 	}
-	
+
 	if err := json.Unmarshal([]byte(response), &items); err != nil {
 		// Try to find the JSON array if it's embedded in text
 		start := strings.Index(response, "[")
@@ -281,13 +281,13 @@ func (c *LLMClassifier) parseResponse(batch []models.PromptEvent, response strin
 			return nil, fmt.Errorf("failed to parse LLM response: %w", err)
 		}
 	}
-	
+
 	if len(items) != len(batch) {
 		// If lengths don't match, we can't safely map them.
 		// For now, return what we have or error.
 		return nil, fmt.Errorf("LLM returned %d items, expected %d", len(items), len(batch))
 	}
-	
+
 	var results []models.Classification
 	for i, item := range items {
 		results = append(results, models.Classification{
@@ -298,7 +298,7 @@ func (c *LLMClassifier) parseResponse(batch []models.PromptEvent, response strin
 			CreatedAt:     time.Now().UTC(),
 		})
 	}
-	
+
 	return results, nil
 }
 
@@ -391,4 +391,3 @@ func (c *LLMClassifier) callVertexAI(ctx context.Context, prompt string) (string
 
 	return res.Candidates[0].Content.Parts[0].Text, nil
 }
-

@@ -75,7 +75,7 @@ func renderRight(summary *retro.Summary, focused bool, width, height int) string
 			}
 			label := d.Date.Format("Mon Jan 2")
 			count := styleMuted.Render(fmt.Sprintf("%d prompts", d.Prompts))
-			
+
 			filled := int(pct / 100 * float64(barW))
 			if filled < 0 {
 				filled = 0

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/lib/pq"
 	"github.com/GrayFlash/kirkup-cli/models"
 	"github.com/GrayFlash/kirkup-cli/store"
+	_ "github.com/lib/pq"
 )
 
 type Store struct {
@@ -157,8 +157,8 @@ func (s *Store) QueryPromptEvents(ctx context.Context, f store.EventFilter) ([]m
 	return events, rows.Err()
 }
 
-func (s *Store) ListEventIDs(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id FROM prompt_events")
+func (s *Store) ListRecentEventIDs(ctx context.Context, since time.Time) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT id FROM prompt_events WHERE timestamp >= $1", since)
 	if err != nil {
 		return nil, err
 	}

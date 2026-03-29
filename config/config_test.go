@@ -10,7 +10,7 @@ func TestConfig_Validation(t *testing.T) {
 	// Create a temporary YAML file with invalid 0 and negative durations
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "config.yaml")
-	
+
 	yamlContent := []byte(`
 daemon:
   poll_interval_seconds: 0
@@ -38,7 +38,7 @@ sessions:
 func TestConfig_MergeDefaults(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "config.yaml")
-	
+
 	// Write an empty config file
 	if err := os.WriteFile(path, []byte(""), 0644); err != nil {
 		t.Fatalf("failed to write test config: %v", err)
@@ -61,7 +61,7 @@ func TestConfig_MergeDefaults(t *testing.T) {
 func TestConfig_InvalidYAML(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "config.yaml")
-	
+
 	// Write malformed YAML
 	if err := os.WriteFile(path, []byte("invalid:\n  - yaml\n    bad: indentation"), 0644); err != nil {
 		t.Fatalf("failed to write test config: %v", err)
@@ -81,7 +81,7 @@ func TestExpandHome(t *testing.T) {
 
 	path := "~/test/dir"
 	expected := filepath.Join(home, "test/dir")
-	
+
 	result := ExpandHome(path)
 	if result != expected {
 		t.Errorf("ExpandHome() = %v, want %v", result, expected)

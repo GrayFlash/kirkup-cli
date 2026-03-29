@@ -253,20 +253,17 @@ func dailyStats(events []models.PromptEvent, from, to time.Time) []DayStat {
 		return time.Date(y, m, d, 0, 0, 0, 0, time.Local)
 	}
 
-	// Sort events by timestamp ascending.
-	sorted := make([]models.PromptEvent, len(events))
-	copy(sorted, events)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Timestamp.Before(sorted[j].Timestamp)
-	})
-
 	type dayData struct {
 		date   time.Time
 		count  int
 		events []models.PromptEvent
 	}
 	days := make(map[dayKey]*dayData)
-	for _, e := range sorted {
+
+	// The DB returns events in DESC order (newest first).
+	// Iterate backwards to process chronologically without copying/sorting the whole slice.
+	for i := len(events) - 1; i >= 0; i-- {
+		e := events[i]
 		k := dayOf(e.Timestamp)
 		if days[k] == nil {
 			days[k] = &dayData{date: dateOf(e.Timestamp)}

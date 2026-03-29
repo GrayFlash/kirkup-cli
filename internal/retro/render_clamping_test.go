@@ -18,7 +18,7 @@ func TestBar_Clamping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// This will panic if strings.Repeat receives a negative number
 			result := bar(tt.percent)
-			
+
 			// We just want to ensure it doesn't panic and returns a string of the correct total length
 			// barWidth is hardcoded to 20 in render.go
 			if len([]rune(result)) != 20 {

@@ -9,12 +9,12 @@ import (
 
 func TestLLMClassifier_ParseResponse(t *testing.T) {
 	c := NewLLMClassifier(config.LLMConfig{Provider: "ollama", Model: "test"})
-	
+
 	batch := []models.PromptEvent{
 		{ID: "id1", Prompt: "p1"},
 		{ID: "id2", Prompt: "p2"},
 	}
-	
+
 	// Valid JSON response
 	resp := `[{"category": "coding", "confidence": 0.9}, {"category": "testing", "confidence": 0.8}]`
 	res, err := c.parseResponse(batch, resp)
@@ -37,7 +37,7 @@ func TestLLMClassifier_ParseResponse(t *testing.T) {
 	if len(res2) != 2 {
 		t.Errorf("expected 2 results, got %d", len(res2))
 	}
-	
+
 	// Mismatched length
 	resp3 := `[{"category": "coding", "confidence": 0.9}]`
 	_, err = c.parseResponse(batch, resp3)
