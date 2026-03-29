@@ -57,6 +57,10 @@ privacy:
 sessions:
   gap_threshold_minutes: 30
 
+# Web dashboard
+retro:
+  dashboard: none   # none, datasette, lite-queen
+
 # Daemon
 daemon:
   poll_interval_seconds: 5

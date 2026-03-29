@@ -13,7 +13,7 @@ func TestInsertClassification_FKViolation(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	
+
 	// Classification for non-existent event ID
 	c := &models.Classification{
 		PromptEventID: "non-existent",

@@ -259,8 +259,8 @@ func dailyStats(events []models.PromptEvent, from, to time.Time) []DayStat {
 		events []models.PromptEvent
 	}
 	days := make(map[dayKey]*dayData)
-	
-	// The DB returns events in DESC order (newest first). 
+
+	// The DB returns events in DESC order (newest first).
 	// Iterate backwards to process chronologically without copying/sorting the whole slice.
 	for i := len(events) - 1; i >= 0; i-- {
 		e := events[i]

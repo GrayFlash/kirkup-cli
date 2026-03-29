@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -49,7 +51,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	if err := s.Migrate(context.Background()); err != nil {
 		return fmt.Errorf("migrate database: %w", err)
 	}
-	
+
 	if cfg.Store.Driver == "postgres" {
 		fmt.Println("initialised postgres database")
 	} else {
@@ -67,6 +69,40 @@ func runInit(_ *cobra.Command, _ []string) error {
 			status = "detected ✓"
 		}
 		fmt.Printf("  %-14s %s\n", a.Name(), status)
+	}
+
+	fmt.Println()
+	fmt.Println("Web dashboard (optional, requires Docker):")
+	fmt.Println("  1. none         — skip, use TUI only")
+	fmt.Println("  2. datasette    — lightweight, SQLite-native, YAML-configured charts")
+	fmt.Println("  3. lite-queen   — minimal SQLite browser")
+	fmt.Print("Choose [1-3] (default: 1): ")
+
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	dashboard := "none"
+	switch choice {
+	case "2":
+		dashboard = "datasette"
+	case "3":
+		dashboard = "lite-queen"
+	}
+
+	if err := updateDashboardConfig(cfgPath, dashboard); err != nil {
+		fmt.Printf("warning: failed to update config with dashboard choice: %v\n", err)
+	}
+	cfg.Retro.Dashboard = dashboard
+
+	if dashboard != "none" {
+		dir, _ := kirkupDir()
+		composePath := filepath.Join(dir, "dashboard", "docker-compose.yaml")
+		if err := generateDashboardCompose(cfg, composePath); err != nil {
+			fmt.Printf("warning: failed to generate docker-compose.yaml: %v\n", err)
+		} else {
+			fmt.Printf("generated compose file at %s\n", composePath)
+		}
 	}
 
 	fmt.Println()
@@ -114,4 +150,45 @@ sessions:
 daemon:
   poll_interval_seconds: 5
   log_level: info
+retro:
+  dashboard: none
 `
+
+func updateDashboardConfig(path string, dashboard string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	content := string(data)
+
+	if !strings.Contains(content, "retro:") {
+		content += "\nretro:\n  dashboard: " + dashboard + "\n"
+	} else {
+		lines := strings.Split(content, "\n")
+		inRetro := false
+		found := false
+		for i, line := range lines {
+			if strings.HasPrefix(line, "retro:") {
+				inRetro = true
+				continue
+			}
+			if inRetro {
+				if strings.HasPrefix(line, "  dashboard:") {
+					lines[i] = "  dashboard: " + dashboard
+					found = true
+					break
+				}
+				if !strings.HasPrefix(line, "  ") && line != "" {
+					break
+				}
+			}
+		}
+		if found {
+			content = strings.Join(lines, "\n")
+		} else {
+			content += "\nretro:\n  dashboard: " + dashboard + "\n"
+		}
+	}
+
+	return os.WriteFile(path, []byte(content), 0o600)
+}

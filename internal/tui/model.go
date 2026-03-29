@@ -265,7 +265,7 @@ func (m Model) selectedProject() string {
 func (m Model) loadProjectsAndSummary() tea.Cmd {
 	return func() tea.Msg {
 		from, to := m.periodRange()
-		
+
 		allSummary, err := retro.Aggregate(
 			context.Background(), m.store,
 			from, to, "",
@@ -274,19 +274,19 @@ func (m Model) loadProjectsAndSummary() tea.Cmd {
 		if err != nil {
 			return summaryMsg{err: err}
 		}
-		
+
 		var projects []projectEntry
 		projects = append(projects, projectEntry{name: "", prompts: allSummary.TotalPrompts})
 		for _, p := range allSummary.Projects {
 			projects = append(projects, projectEntry{name: p.Name, prompts: p.Prompts})
 		}
-		
+
 		// If the user had a selection, try to keep the same project name selected
 		selectedProject := ""
 		if m.selected < len(m.projects) {
 			selectedProject = m.projects[m.selected].name
 		}
-		
+
 		newSelectedIndex := 0
 		if selectedProject != "" {
 			for i, p := range projects {
@@ -296,13 +296,13 @@ func (m Model) loadProjectsAndSummary() tea.Cmd {
 				}
 			}
 		}
-		
+
 		// Now fetch the filtered summary
 		filterProject := ""
 		if newSelectedIndex > 0 {
 			filterProject = projects[newSelectedIndex].name
 		}
-		
+
 		var summary *retro.Summary
 		if filterProject == "" {
 			summary = allSummary
@@ -343,4 +343,3 @@ func truncDay(t time.Time) time.Time {
 	y, m, d := t.Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
 }
-

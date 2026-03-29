@@ -43,4 +43,3 @@ func ResolveProject(projects []config.ProjectConfig, gitRemote, workingDir strin
 	}
 	return ""
 }
-

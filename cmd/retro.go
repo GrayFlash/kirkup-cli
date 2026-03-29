@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/GrayFlash/kirkup-cli/config"
 	"github.com/GrayFlash/kirkup-cli/internal/retro"
 )
 
@@ -17,8 +20,9 @@ var (
 	retroFrom    string
 	retroTo      string
 	retroProject string
+	retroWeb     bool
+	retroWebStop bool
 )
-
 var retroCmd = &cobra.Command{
 	Use:   "retro",
 	Short: "Show a retrospective summary of your engineering activity",
@@ -31,15 +35,28 @@ func init() {
 	retroCmd.Flags().StringVar(&retroFrom, "from", "", "Start date (YYYY-MM-DD)")
 	retroCmd.Flags().StringVar(&retroTo, "to", "", "End date (YYYY-MM-DD)")
 	retroCmd.Flags().StringVar(&retroProject, "project", "", "Filter by project")
+	retroCmd.Flags().BoolVar(&retroWeb, "web", false, "Launch the web dashboard via Docker")
+	retroCmd.Flags().BoolVar(&retroWebStop, "web-stop", false, "Stop the web dashboard")
 	rootCmd.AddCommand(retroCmd)
 }
 
 func runRetro(_ *cobra.Command, _ []string) error {
+	if retroWebStop {
+		return stopWebDashboard()
+	}
+
 	cfg, s, cleanup, err := openApp()
 	if err != nil {
 		return err
 	}
 	defer cleanup()
+
+	if retroWeb {
+		if cfg.Retro.Dashboard == "none" || cfg.Retro.Dashboard == "" {
+			return fmt.Errorf("no web dashboard configured; run 'kirkup init' to select one")
+		}
+		return launchWebDashboard(cfg)
+	}
 
 	from, to, err := resolveRange()
 	if err != nil {
@@ -89,8 +106,55 @@ func currentMonth() (time.Time, time.Time, error) {
 	return from, to, nil
 }
 
-
 func truncateDay(t time.Time) time.Time {
 	y, m, d := t.Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+}
+
+func launchWebDashboard(cfg *config.Config) error {
+	dir, err := kirkupDir()
+	if err != nil {
+		return err
+	}
+	composePath := filepath.Join(dir, "dashboard", "docker-compose.yaml")
+
+	if err := generateDashboardCompose(cfg, composePath); err != nil {
+		return fmt.Errorf("generate compose: %w", err)
+	}
+
+	fmt.Println("launching dashboard via docker-compose...")
+	cmd := exec.Command("docker", "compose", "-f", composePath, "up", "-d")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to start dashboard: %w (is Docker installed and running?)", err)
+	}
+
+	fmt.Println("\ndashboard is running!")
+	fmt.Println("access it at: http://localhost:8001")
+	return nil
+}
+
+func stopWebDashboard() error {
+	dir, err := kirkupDir()
+	if err != nil {
+		return err
+	}
+	composePath := filepath.Join(dir, "dashboard", "docker-compose.yaml")
+
+	if _, err := os.Stat(composePath); err != nil {
+		fmt.Println("dashboard is not running or not configured")
+		return nil
+	}
+
+	fmt.Println("stopping dashboard...")
+	cmd := exec.Command("docker", "compose", "-f", composePath, "down")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to stop dashboard: %w", err)
+	}
+
+	fmt.Println("dashboard stopped.")
+	return nil
 }

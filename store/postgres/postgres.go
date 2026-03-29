@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/lib/pq"
 	"github.com/GrayFlash/kirkup-cli/models"
 	"github.com/GrayFlash/kirkup-cli/store"
+	_ "github.com/lib/pq"
 )
 
 type Store struct {

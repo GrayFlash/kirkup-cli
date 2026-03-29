@@ -21,8 +21,8 @@ func New(name string, cfg config.AgentConfig) *Adapter {
 	return &Adapter{name: name, cfg: cfg}
 }
 
-func (a *Adapter) Name() string { return a.name }
-func (a *Adapter) Detect() bool { return true }
+func (a *Adapter) Name() string         { return a.name }
+func (a *Adapter) Detect() bool         { return true }
 func (a *Adapter) WatchGlobs() []string { return a.cfg.LogPaths }
 
 func (a *Adapter) Events(ctx context.Context, path string) ([]models.PromptEvent, error) {

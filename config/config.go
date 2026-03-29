@@ -16,6 +16,11 @@ type Config struct {
 	Sessions   SessionsConfig         `yaml:"sessions"`
 	Classifier ClassifierConfig       `yaml:"classifier"`
 	Privacy    PrivacyConfig          `yaml:"privacy"`
+	Retro      RetroConfig            `yaml:"retro"`
+}
+
+type RetroConfig struct {
+	Dashboard string `yaml:"dashboard"`
 }
 
 type PrivacyConfig struct {
@@ -80,7 +85,7 @@ type AgentConfig struct {
 	LogPaths []string `yaml:"log_paths"`
 
 	// Generic parsing support
-	Format         string `yaml:"format"`           // "json" or "jsonl"
+	Format         string `yaml:"format"` // "json" or "jsonl"
 	PromptField    string `yaml:"prompt_field"`
 	TimestampField string `yaml:"timestamp_field"`
 	SessionIDField string `yaml:"session_id_field"`
@@ -153,6 +158,9 @@ func defaults() *Config {
 		},
 		Sessions: SessionsConfig{
 			GapThresholdMinutes: 30,
+		},
+		Retro: RetroConfig{
+			Dashboard: "none",
 		},
 	}
 }

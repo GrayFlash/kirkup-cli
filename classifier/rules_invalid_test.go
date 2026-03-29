@@ -12,7 +12,7 @@ func TestCompileRule_InvalidRegex(t *testing.T) {
 	}
 
 	compiled := compileRule(r)
-	
+
 	// Should only compile the valid one and skip the invalid one without panicking
 	if len(compiled.Patterns) != 1 {
 		t.Fatalf("expected 1 valid pattern compiled, got %d", len(compiled.Patterns))
@@ -26,7 +26,7 @@ func TestSortRules(t *testing.T) {
 		{Category: "mid", Priority: 5},
 	}
 	sortRules(rules)
-	
+
 	if rules[0].Priority != 10 {
 		t.Errorf("expected highest priority first, got %d", rules[0].Priority)
 	}
