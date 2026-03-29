@@ -60,6 +60,7 @@ sessions:
 # Web dashboard
 retro:
   dashboard: none   # none, datasette, lite-queen
+  port: 8001
 
 # Daemon
 daemon:

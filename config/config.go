@@ -21,8 +21,8 @@ type Config struct {
 
 type RetroConfig struct {
 	Dashboard string `yaml:"dashboard"`
+	Port      int    `yaml:"port"`
 }
-
 type PrivacyConfig struct {
 	Redact   bool     `yaml:"redact"`
 	Patterns []string `yaml:"patterns"`
@@ -161,8 +161,8 @@ func defaults() *Config {
 		},
 		Retro: RetroConfig{
 			Dashboard: "none",
-		},
-	}
+			Port:      8001,
+		}}
 }
 
 func ExpandHome(path string) string {

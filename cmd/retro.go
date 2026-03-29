@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -45,18 +46,22 @@ func runRetro(_ *cobra.Command, _ []string) error {
 		return stopWebDashboard()
 	}
 
-	cfg, s, cleanup, err := openApp()
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
 	if retroWeb {
+		cfg, err := loadConfig()
+		if err != nil {
+			return err
+		}
 		if cfg.Retro.Dashboard == "none" || cfg.Retro.Dashboard == "" {
 			return fmt.Errorf("no web dashboard configured; run 'kirkup init' to select one")
 		}
 		return launchWebDashboard(cfg)
 	}
+
+	cfg, s, cleanup, err := openApp()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 
 	from, to, err := resolveRange()
 	if err != nil {
@@ -122,7 +127,7 @@ func launchWebDashboard(cfg *config.Config) error {
 		return fmt.Errorf("generate compose: %w", err)
 	}
 
-	fmt.Println("launching dashboard via docker-compose...")
+	fmt.Println("launching dashboard via docker compose...")
 	cmd := exec.Command("docker", "compose", "-f", composePath, "up", "-d")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -131,7 +136,12 @@ func launchWebDashboard(cfg *config.Config) error {
 	}
 
 	fmt.Println("\ndashboard is running!")
-	fmt.Println("access it at: http://localhost:8001")
+
+	port := cfg.Retro.Port
+	if port == 0 {
+		port = 8001
+	}
+	fmt.Printf("access it at: http://localhost:%d\n", port)
 	return nil
 }
 
@@ -144,6 +154,12 @@ func stopWebDashboard() error {
 
 	if _, err := os.Stat(composePath); err != nil {
 		fmt.Println("dashboard is not running or not configured")
+		return nil
+	}
+
+	checkCmd := exec.Command("docker", "compose", "-f", composePath, "ps", "-q")
+	if out, err := checkCmd.Output(); err == nil && len(strings.TrimSpace(string(out))) == 0 {
+		fmt.Println("dashboard is not running")
 		return nil
 	}
 
