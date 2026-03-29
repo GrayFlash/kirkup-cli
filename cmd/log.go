@@ -17,6 +17,7 @@ var (
 	logProject  string
 	logTime     string
 	logCategory string
+	logDuration string
 )
 
 var logCmd = &cobra.Command{
@@ -32,6 +33,8 @@ func init() {
 	logCmd.Flags().StringVarP(&logProject, "project", "p", "", "Project name")
 	logCmd.Flags().StringVarP(&logTime, "time", "t", "", "Time of activity (YYYY-MM-DD HH:MM:SS), defaults to now")
 	logCmd.Flags().StringVarP(&logCategory, "category", "c", "", "Category for this activity (e.g. coding, review, etc)")
+	logCmd.Flags().StringVarP(&logDuration, "duration", "d", "", "Duration of the activity (e.g. 45m, 1h30m)")
+	_ = logCmd.MarkFlagRequired("duration")
 	rootCmd.AddCommand(logCmd)
 }
 
@@ -41,6 +44,11 @@ func runLog(_ *cobra.Command, args []string) error {
 		return err
 	}
 	defer cleanup()
+
+	dur, err := time.ParseDuration(logDuration)
+	if err != nil {
+		return fmt.Errorf("invalid duration format: %w (use e.g. 45m, 1h)", err)
+	}
 
 	description := strings.Join(args, " ")
 
@@ -68,55 +76,86 @@ func runLog(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	ts := time.Now().UTC()
-
+	endTime := time.Now().UTC()
 	if logTime != "" {
 		t, err := time.ParseInLocation("2006-01-02 15:04:05", logTime, time.Local)
 		if err != nil {
 			return fmt.Errorf("invalid time format: %w", err)
 		}
-		ts = t.UTC()
+		endTime = t.UTC()
 	}
 
-	e := &models.PromptEvent{
-		Agent:     "manual",
-		Prompt:    description,
-		Timestamp: ts,
-		Project:   logProject,
+	startTime := endTime.Add(-dur)
+
+	gapMinutes := cfg.Sessions.GapThresholdMinutes
+	if gapMinutes <= 0 {
+		gapMinutes = 30
+	}
+	// step by half the gap to ensure retro joins them
+	step := time.Duration(gapMinutes) * time.Minute / 2
+	if step <= 0 {
+		step = 15 * time.Minute
 	}
 
-	if err := s.InsertPromptEvent(context.Background(), e); err != nil {
-		return fmt.Errorf("insert event: %w", err)
+	var timestamps []time.Time
+	for cur := startTime; cur.Before(endTime); cur = cur.Add(step) {
+		timestamps = append(timestamps, cur)
+	}
+	timestamps = append(timestamps, endTime)
+
+	rc := classifier.NewRuleClassifier()
+	for _, r := range cfg.Classifier.CustomRules {
+		rc.AddRule(r.Category, r.Keywords, r.Patterns, r.Priority)
 	}
 
-	// Automatic classification if category provided or via rules
-	if logCategory != "" {
-		c := &models.Classification{
-			PromptEventID: e.ID,
-			Category:      logCategory,
-			Confidence:    1.0,
-			Classifier:    "manual",
-			CreatedAt:     time.Now().UTC(),
+	var lastCategory string
+
+	for _, t := range timestamps {
+		e := &models.PromptEvent{
+			Agent:     "manual",
+			Prompt:    description,
+			Timestamp: t,
+			Project:   logProject,
 		}
-		if err := s.InsertClassification(context.Background(), c); err != nil {
-			fmt.Printf("warning: failed to insert classification: %v\n", err)
+
+		if err := s.InsertPromptEvent(context.Background(), e); err != nil {
+			return fmt.Errorf("insert event: %w", err)
 		}
-	} else {
-		// Run rule-based classification immediately for this single event
-		rc := classifier.NewRuleClassifier()
-		for _, r := range cfg.Classifier.CustomRules {
-			rc.AddRule(r.Category, r.Keywords, r.Patterns, r.Priority)
-		}
-		cs, err := rc.Classify(context.Background(), []models.PromptEvent{*e})
-		if err == nil && len(cs) > 0 {
-			if err := s.InsertClassification(context.Background(), &cs[0]); err != nil {
-				fmt.Printf("warning: failed to auto-classify: %v\n", err)
-			} else {
-				fmt.Printf("Auto-categorised as: %s\n", cs[0].Category)
+
+		if logCategory != "" {
+			c := &models.Classification{
+				PromptEventID: e.ID,
+				Category:      logCategory,
+				Confidence:    1.0,
+				Classifier:    "manual",
+				CreatedAt:     time.Now().UTC(),
+			}
+			if err := s.InsertClassification(context.Background(), c); err != nil {
+				fmt.Printf("warning: failed to insert classification: %v\n", err)
+			}
+			lastCategory = logCategory
+		} else {
+			cs, err := rc.Classify(context.Background(), []models.PromptEvent{*e})
+			if err == nil && len(cs) > 0 {
+				if err := s.InsertClassification(context.Background(), &cs[0]); err != nil {
+					fmt.Printf("warning: failed to auto-classify: %v\n", err)
+				} else {
+					lastCategory = cs[0].Category
+				}
 			}
 		}
 	}
 
 	fmt.Printf("Logged activity: %s\n", description)
+	fmt.Printf("  Duration: %s (%s - %s)\n",
+		dur,
+		startTime.Local().Format("15:04"),
+		endTime.Local().Format("15:04"),
+	)
+
+	if lastCategory != "" {
+		fmt.Printf("  Category: %s\n", lastCategory)
+	}
+
 	return nil
 }
