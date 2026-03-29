@@ -385,7 +385,7 @@ func (s *Store) ProjectStats(ctx context.Context) ([]models.ProjectStat, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var stats []models.ProjectStat
 	for rows.Next() {
